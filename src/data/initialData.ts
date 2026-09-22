@@ -493,8 +493,8 @@ export const initialStoreData: AppStoreData = {
     }
   ],
   config: {
-    authorPasswordHash: 'BienSoan#THCS2025',
-    adminPasswordHash: 'QuanLy#LSuDiaLi2025',
+    authorPasswordHash: 'biensoan2025',
+    adminPasswordHash: 'quanly2025',
     studentCodeScope: 'shared'
   }
 };
