@@ -22,6 +22,17 @@ const PORT = 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// CORS & Preflight handling for API routes
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 // Persistent Storage in local file
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'store.json');
@@ -402,10 +413,12 @@ app.post('/api/submissions', (req, res) => {
 
 // 4. Gemini Multimodal Document Extraction & Theory Summarization
 app.post('/api/gemini/extract-and-summarize', async (req, res) => {
-  const { subject, grade, lessonTitle, textContent, files } = req.body;
-  const ai = getAI();
+  try {
+    const body = req.body || {};
+    const { subject = 'lich-su', grade = 6, lessonTitle = '', textContent = '', files = [] } = body;
+    const ai = getAI();
 
-  const promptText = `Bạn là chuyên gia giáo dục THCS chuyên môn ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp ${grade} của Việt Nam theo chương trình Giáo dục Phổ thông 2018 (SGK Kết nối tri thức, Chân trời sáng tạo, Cánh Diều).
+    const promptText = `Bạn là chuyên gia giáo dục THCS chuyên môn ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp ${grade} của Việt Nam theo chương trình Giáo dục Phổ thông 2018 (SGK Kết nối tri thức, Chân trời sáng tạo, Cánh Diều).
 Hãy phân tích tài liệu/văn bản được cung cấp và trích xuất/tóm tắt nội dung ôn tập lý thuyết chuẩn mực cho bài học: "${lessonTitle || 'Bài học theo tài liệu'}".
 
 Yêu cầu tóm tắt gồm:
@@ -418,39 +431,51 @@ Nội dung văn bản đính kèm:
 ${textContent || '(Tài liệu được gửi qua file đính kèm)'}
 `;
 
-  if (!ai) {
-    // High quality offline fallback
-    return res.json({
-      success: true,
-      data: {
-        title: lessonTitle || `Bài học ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp ${grade}`,
-        summary: `Tóm tắt nội dung trọng tâm bài học theo tài liệu đã tải lên. Học sinh cần nắm vững các sự kiện, nguyên nhân, diễn biến và ý nghĩa cơ bản (hoặc các đặc điểm vị trí, địa hình, khí hậu).`,
-        keyPoints: [
-          'Kiến thức trọng tâm 1: Xác định rõ mốc thời gian hoặc vị trí địa lí quan trọng.',
-          'Kiến thức trọng tâm 2: Phân tích được nguyên nhân cốt lõi và mối liên hệ thực tế.',
-          'Kiến thức trọng tâm 3: Hiểu được tác động đối với đời sống con người và sự phát triển xã hội.',
-          'Kiến thức trọng tâm 4: Rút ra bài học lịch sử hoặc giải pháp bảo vệ môi trường, phát triển bền vững.'
-        ],
-        timelineOrFacts: [
-          { title: 'Sự kiện / Đặc điểm 1', content: 'Chi tiết quan trọng được trích xuất từ tài liệu SGK.' },
-          { title: 'Sự kiện / Đặc điểm 2', content: 'Hiện tượng hoặc kết quả mang tính bước ngoặt.' },
-          { title: 'Sự kiện / Đặc điểm 3', content: 'Ý nghĩa lịch sử hoặc giá trị kinh tế - xã hội to lớn.' }
-        ]
-      }
-    });
-  }
+    if (!ai) {
+      // High quality offline fallback
+      return res.json({
+        success: true,
+        data: {
+          title: lessonTitle || `Bài học ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp ${grade}`,
+          summary: `Tóm tắt nội dung trọng tâm bài học theo tài liệu đã tải lên. Học sinh cần nắm vững các sự kiện, nguyên nhân, diễn biến và ý nghĩa cơ bản (hoặc các đặc điểm vị trí, địa hình, khí hậu).`,
+          keyPoints: [
+            'Kiến thức trọng tâm 1: Xác định rõ mốc thời gian hoặc vị trí địa lí quan trọng.',
+            'Kiến thức trọng tâm 2: Phân tích được nguyên nhân cốt lõi và mối liên hệ thực tế.',
+            'Kiến thức trọng tâm 3: Hiểu được tác động đối với đời sống con người và sự phát triển xã hội.',
+            'Kiến thức trọng tâm 4: Rút ra bài học lịch sử hoặc giải pháp bảo vệ môi trường, phát triển bền vững.'
+          ],
+          timelineOrFacts: [
+            { title: 'Sự kiện / Đặc điểm 1', content: 'Chi tiết quan trọng được trích xuất từ tài liệu SGK.' },
+            { title: 'Sự kiện / Đặc điểm 2', content: 'Hiện tượng hoặc kết quả mang tính bước ngoặt.' },
+            { title: 'Sự kiện / Đặc điểm 3', content: 'Ý nghĩa lịch sử hoặc giá trị kinh tế - xã hội to lớn.' }
+          ]
+        }
+      });
+    }
 
-  try {
     const contents: any[] = [];
     if (Array.isArray(files) && files.length > 0) {
       for (const f of files) {
-        if (f.base64 && f.mimeType) {
-          contents.push({
-            inlineData: {
-              data: f.base64.replace(/^data:[^;]+;base64,/, ''),
-              mimeType: f.mimeType
+        if (f && f.base64) {
+          const rawBase64 = String(f.base64).replace(/^data:[^;]+;base64,/, '');
+          const mime = f.mimeType || 'application/pdf';
+          if (mime.startsWith('image/') || mime === 'application/pdf') {
+            contents.push({
+              inlineData: {
+                data: rawBase64,
+                mimeType: mime
+              }
+            });
+          } else {
+            try {
+              const decodedText = Buffer.from(rawBase64, 'base64').toString('utf-8');
+              if (decodedText && !/[\x00-\x08\x0E-\x1F]/.test(decodedText.slice(0, 500))) {
+                contents.push({ text: `Tài liệu đính kèm ("${f.name || 'tài liệu'}"):\n${decodedText.slice(0, 30000)}` });
+              }
+            } catch (e) {
+              console.warn('Cannot decode text file attachment', e);
             }
-          });
+          }
         }
       }
     }
@@ -458,7 +483,7 @@ ${textContent || '(Tài liệu được gửi qua file đính kèm)'}
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
-      contents: contents.length === 1 ? contents[0].text : { parts: contents },
+      contents: contents,
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
@@ -488,32 +513,34 @@ ${textContent || '(Tài liệu được gửi qua file đính kèm)'}
     });
 
     const parsed = JSON.parse(response.text?.trim() || '{}');
-    res.json({ success: true, data: parsed });
+    return res.json({ success: true, data: parsed });
   } catch (err: any) {
     console.error('Gemini extract error:', err);
-    res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: err.message || 'Lỗi xử lý trích xuất văn bản với Gemini AI' });
   }
 });
 
 // 5. Gemini AI Question Generator (Diverse question types, Cognitive levels: Biết, Hiểu, Vận dụng, 5-30 questions)
 app.post('/api/gemini/generate-questions', async (req, res) => {
-  const {
-    subject,
-    grade,
-    lessonTitle,
-    lessonTheory,
-    count = 10,
-    ratios = { biet: 40, hieu: 40, vanDung: 20 },
-    questionTypes = ['multiple-choice', 'true-false', 'matching', 'short-answer', 'fill-in-blank'],
-    customPrompt = '',
-    files = []
-  } = req.body;
+  try {
+    const body = req.body || {};
+    const {
+      subject = 'lich-su',
+      grade = 6,
+      lessonTitle = '',
+      lessonTheory = '',
+      count = 10,
+      ratios = { biet: 40, hieu: 40, vanDung: 20 },
+      questionTypes = ['multiple-choice', 'true-false', 'matching', 'short-answer', 'fill-in-blank'],
+      customPrompt = '',
+      files = []
+    } = body;
 
-  // Validate count between 5 and 30 as requested
-  const validCount = Math.max(5, Math.min(30, Number(count) || 10));
-  const ai = getAI();
+    // Validate count between 5 and 30 as requested
+    const validCount = Math.max(5, Math.min(30, Number(count) || 10));
+    const ai = getAI();
 
-  const promptText = `Bạn là chuyên gia khảo thí và biên soạn đề thi môn ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} THCS lớp ${grade} của Bộ Giáo dục và Đào tạo Việt Nam.
+    const promptText = `Bạn là chuyên gia khảo thí và biên soạn đề thi môn ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} THCS lớp ${grade} của Bộ Giáo dục và Đào tạo Việt Nam.
 Hãy tạo chính xác ${validCount} câu hỏi ôn tập và kiểm tra chất lượng cao cho bài học: "${lessonTitle || 'Chương trình THCS'}".
 
 YÊU CẦU BẮT BUỘC:
@@ -536,23 +563,35 @@ ${customPrompt ? `Yêu cầu thêm từ giáo viên: ${customPrompt}` : ''}
 ${lessonTheory ? `Kiến thức nền tảng:\n${typeof lessonTheory === 'string' ? lessonTheory : JSON.stringify(lessonTheory)}` : ''}
 `;
 
-  if (!ai) {
-    // Generate intelligent simulated questions matching exact requirements
-    const fallbackQuestions = generateFallbackQuestions(subject, grade, lessonTitle, validCount, ratios);
-    return res.json({ success: true, questions: fallbackQuestions });
-  }
+    if (!ai) {
+      // Generate intelligent simulated questions matching exact requirements
+      const fallbackQuestions = generateFallbackQuestions(subject, grade, lessonTitle, validCount, ratios);
+      return res.json({ success: true, questions: fallbackQuestions });
+    }
 
-  try {
     const contents: any[] = [];
     if (Array.isArray(files) && files.length > 0) {
       for (const f of files) {
-        if (f.base64 && f.mimeType) {
-          contents.push({
-            inlineData: {
-              data: f.base64.replace(/^data:[^;]+;base64,/, ''),
-              mimeType: f.mimeType
+        if (f && f.base64) {
+          const rawBase64 = String(f.base64).replace(/^data:[^;]+;base64,/, '');
+          const mime = f.mimeType || 'application/pdf';
+          if (mime.startsWith('image/') || mime === 'application/pdf') {
+            contents.push({
+              inlineData: {
+                data: rawBase64,
+                mimeType: mime
+              }
+            });
+          } else {
+            try {
+              const decodedText = Buffer.from(rawBase64, 'base64').toString('utf-8');
+              if (decodedText && !/[\x00-\x08\x0E-\x1F]/.test(decodedText.slice(0, 500))) {
+                contents.push({ text: `Tài liệu đính kèm ("${f.name || 'tài liệu'}"):\n${decodedText.slice(0, 30000)}` });
+              }
+            } catch (e) {
+              console.warn('Cannot decode text file attachment', e);
             }
-          });
+          }
         }
       }
     }
@@ -560,7 +599,7 @@ ${lessonTheory ? `Kiến thức nền tảng:\n${typeof lessonTheory === 'string
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
-      contents: contents.length === 1 ? contents[0].text : { parts: contents },
+      contents: contents,
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
@@ -626,17 +665,154 @@ ${lessonTheory ? `Kiến thức nền tảng:\n${typeof lessonTheory === 'string
       id: `ai-q-${Date.now()}-${idx}`,
       subject,
       grade,
-      lessonId: req.body.lessonId || 'custom',
+      lessonId: body.lessonId || 'custom',
       lessonName: lessonTitle || `Bài học môn ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'}`,
       createdAt: new Date().toISOString()
     }));
 
-    res.json({ success: true, questions: formatted });
+    return res.json({ success: true, questions: formatted });
   } catch (err: any) {
     console.error('Gemini generate questions error:', err);
-    // Graceful fallback to guarantee UI remains responsive
-    const fallbackQuestions = generateFallbackQuestions(subject, grade, lessonTitle, validCount, ratios);
-    res.json({ success: true, questions: fallbackQuestions, warning: err.message });
+    const body = req.body || {};
+    const validCount = Math.max(5, Math.min(30, Number(body.count) || 10));
+    const fallbackQuestions = generateFallbackQuestions(body.subject || 'lich-su', body.grade || 6, body.lessonTitle || '', validCount, body.ratios || {});
+    return res.json({ success: true, questions: fallbackQuestions, warning: err.message });
+  }
+});
+
+// 6. Gemini AI Exam & Matrix Generator ("AI Biên soạn" đề thi theo ma trận chuẩn Bộ GD&ĐT)
+app.post('/api/gemini/generate-exam-matrix', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const {
+      subject = 'lich-su',
+      grade = 6,
+      examTitle = '',
+      durationMinutes = 45,
+      scoreScale = 10,
+      questionCount = 10,
+      ratios = { biet: 40, hieu: 40, vanDung: 20 },
+      questionTypes = ['multiple-choice', 'true-false', 'matching', 'short-answer'],
+      customRequirements = ''
+    } = body;
+
+    const validCount = Math.max(5, Math.min(30, Number(questionCount) || 10));
+    const bietCount = Math.round(((ratios.biet || 40) / 100) * validCount);
+    const hieuCount = Math.round(((ratios.hieu || 40) / 100) * validCount);
+    const vanDungCount = Math.max(1, validCount - bietCount - hieuCount);
+
+    const matrix = {
+      bietCount,
+      hieuCount,
+      vanDungCount,
+      totalQuestions: validCount,
+      scoreScale,
+      durationMinutes,
+      bietScore: Number((((ratios.biet || 40) / 100) * scoreScale).toFixed(1)),
+      hieuScore: Number((((ratios.hieu || 40) / 100) * scoreScale).toFixed(1)),
+      vanDungScore: Number((((ratios.vanDung || 20) / 100) * scoreScale).toFixed(1)),
+      description: `Ma trận đề kiểm tra môn ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp ${grade}, thời gian ${durationMinutes} phút theo định hướng GDPT 2018 (${ratios.biet || 40}% Nhận biết, ${ratios.hieu || 40}% Thông hiểu, ${ratios.vanDung || 20}% Vận dụng).`
+    };
+
+    const ai = getAI();
+    let generatedQuestions: any[] = [];
+
+    if (!ai) {
+      generatedQuestions = generateFallbackQuestions(subject, grade, examTitle || `Kiểm tra ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp ${grade}`, validCount, ratios);
+    } else {
+      try {
+        const promptText = `Bạn là chuyên gia khảo thí và biên soạn đề kiểm tra môn ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} THCS lớp ${grade} của Bộ Giáo dục và Đào tạo Việt Nam.
+Hãy biên soạn một đề kiểm tra hoàn chỉnh gồm ${validCount} câu hỏi chuẩn ma trận:
+- Tiêu đề đề kiểm tra: "${examTitle || `Kiểm tra môn ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp ${grade}`}"
+- Thời lượng: ${durationMinutes} phút. Thang điểm: ${scoreScale}.
+- Ma trận nhận thức:
+  + ${bietCount} câu Nhận biết (mốc thời gian, vị trí, sự kiện SGK).
+  + ${hieuCount} câu Thông hiểu (nguyên nhân, so sánh, quy luật).
+  + ${vanDungCount} câu Vận dụng (liên hệ thực tiễn Việt Nam, bài học kinh nghiệm).
+- Các dạng câu hỏi: [${questionTypes.join(', ')}].
+${customRequirements ? `Yêu cầu thêm từ giáo viên: ${customRequirements}` : ''}
+`;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: promptText,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  type: { type: Type.STRING },
+                  cognitiveLevel: { type: Type.STRING },
+                  questionText: { type: Type.STRING },
+                  options: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  correctAnswers: {
+                    type: Type.ARRAY,
+                    items: { type: Type.INTEGER }
+                  },
+                  statements: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        statement: { type: Type.STRING },
+                        isCorrect: { type: Type.BOOLEAN }
+                      },
+                      required: ['statement', 'isCorrect']
+                    }
+                  },
+                  matchingPairs: {
+                    type: Type.ARRAY,
+                    items: {
+                      type: Type.OBJECT,
+                      properties: {
+                        left: { type: Type.STRING },
+                        right: { type: Type.STRING }
+                      },
+                      required: ['left', 'right']
+                    }
+                  },
+                  acceptableAnswers: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  essayGuide: { type: Type.STRING },
+                  explanation: { type: Type.STRING }
+                },
+                required: ['type', 'cognitiveLevel', 'questionText']
+              }
+            }
+          }
+        });
+
+        const parsed = JSON.parse(response.text?.trim() || '[]');
+        generatedQuestions = parsed.map((q: any, idx: number) => ({
+          ...q,
+          id: `ai-exam-q-${Date.now()}-${idx}`,
+          subject,
+          grade,
+          lessonId: 'exam-matrix',
+          lessonName: examTitle || `Đề kiểm tra ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'}`,
+          createdAt: new Date().toISOString()
+        }));
+      } catch (geminiErr: any) {
+        console.warn('Gemini exam matrix fallback triggered:', geminiErr);
+        generatedQuestions = generateFallbackQuestions(subject, grade, examTitle || `Kiểm tra ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp ${grade}`, validCount, ratios);
+      }
+    }
+
+    return res.json({
+      success: true,
+      matrix,
+      questions: generatedQuestions
+    });
+  } catch (err: any) {
+    console.error('Exam matrix error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Lỗi biên soạn ma trận đề kiểm tra' });
   }
 });
 
@@ -774,6 +950,29 @@ function generateFallbackQuestions(subject: string, grade: number, lessonTitle: 
 
   return result.slice(0, count);
 }
+
+// -------------------------------------------------------------
+// STRICT API CATCH-ALL & JSON ERROR HANDLERS (BEFORE VITE/SPA FALLBACK)
+// -------------------------------------------------------------
+// Any /api request that didn't match an endpoint MUST return JSON 404, never fall through to HTML!
+app.all('/api/*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: `API route không tồn tại: ${req.method} ${req.path}`,
+  });
+});
+
+// JSON Error Handler for /api routes
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (req.path.startsWith('/api') || req.headers['content-type']?.includes('application/json')) {
+    console.error('[API Error Caught]', req.method, req.path, err);
+    return res.status(err.status || 500).json({
+      success: false,
+      error: err.message || 'Lỗi xử lý yêu cầu API trên máy chủ',
+    });
+  }
+  next(err);
+});
 
 // -------------------------------------------------------------
 // VITE INTEGRATION

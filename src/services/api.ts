@@ -6,11 +6,36 @@
 import { AppStoreData, ExamSubmission, Student, Classroom, Lesson, Question, Exam } from '../types';
 import * as XLSX from 'xlsx';
 
+/**
+ * Robust JSON fetch helper that always sends Accept: application/json
+ * and prevents "Unexpected token '<', <!DOCTYPE... is not valid JSON" errors
+ * by verifying the Content-Type before parsing JSON.
+ */
+async function safeFetchJson<T = any>(url: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers || {});
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json');
+  }
+
+  const res = await fetch(url, { ...init, headers });
+  const contentType = res.headers.get('content-type') || '';
+
+  if (!contentType.includes('application/json')) {
+    const text = await res.text();
+    console.error(`[API Non-JSON Response from ${url}]:`, text.slice(0, 300));
+    if (!res.ok) {
+      throw new Error(`Máy chủ báo lỗi (${res.status} ${res.statusText}): Vui lòng kiểm tra lại dịch vụ API.`);
+    }
+    throw new Error('Máy chủ phản hồi HTML thay vì JSON. Vui lòng thử lại sau vài giây.');
+  }
+
+  const json = await res.json();
+  return json as T;
+}
+
 export async function fetchStore(): Promise<AppStoreData> {
   try {
-    const res = await fetch('/api/data');
-    if (!res.ok) throw new Error('Không thể tải dữ liệu máy chủ');
-    const json = await res.json();
+    const json = await safeFetchJson<{ success: boolean; data: AppStoreData }>('/api/data');
     return json.data;
   } catch (error) {
     console.warn('Using localStorage fallback for store data', error);
@@ -26,13 +51,11 @@ export const getStoreApi = fetchStore;
 
 export async function updateStore(partial: Partial<AppStoreData>): Promise<AppStoreData> {
   try {
-    const res = await fetch('/api/data', {
+    const json = await safeFetchJson<{ success: boolean; data: AppStoreData }>('/api/data', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(partial),
     });
-    if (!res.ok) throw new Error('Lỗi cập nhật dữ liệu máy chủ');
-    const json = await res.json();
     localStorage.setItem('on_tap_thcs_store', JSON.stringify(json.data));
     return json.data;
   } catch (error) {
@@ -61,17 +84,12 @@ export async function loginApi(payload: {
   hasSetPassword?: boolean;
   error?: string;
 }> {
-  const res = await fetch('/api/auth/login', {
+  const json = await safeFetchJson<any>('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  const json = await res.json();
-  if (!res.ok) {
-    // If 401 with requiresPassword flag, return the object so UI can prompt for password
-    if (json.requiresPassword) {
-      return json;
-    }
+  if (!json.success && !json.requiresPassword) {
     throw new Error(json.error || 'Đăng nhập thất bại');
   }
   return json;
@@ -82,13 +100,12 @@ export async function checkStudentStatusApi(classCode: string, studentCode: stri
   hasSetPassword: boolean;
   fullName: string;
 }> {
-  const res = await fetch('/api/student/check-status', {
+  const json = await safeFetchJson<any>('/api/student/check-status', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ classCode, studentCode }),
   });
-  const json = await res.json();
-  if (!res.ok) {
+  if (!json.success) {
     throw new Error(json.error || 'Không tìm thấy học sinh');
   }
   return json;
@@ -98,13 +115,12 @@ export async function setupStudentPasswordApi(studentId: string, password: strin
   success: boolean;
   student: Student;
 }> {
-  const res = await fetch('/api/student/setup-password', {
+  const json = await safeFetchJson<any>('/api/student/setup-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ studentId, password }),
   });
-  const json = await res.json();
-  if (!res.ok) {
+  if (!json.success) {
     throw new Error(json.error || 'Lỗi thiết lập mật khẩu');
   }
   return json;
@@ -118,13 +134,12 @@ export async function changeStudentPasswordApi(
   success: boolean;
   student: Student;
 }> {
-  const res = await fetch('/api/student/change-password', {
+  const json = await safeFetchJson<any>('/api/student/change-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ studentId, currentPassword, newPassword }),
   });
-  const json = await res.json();
-  if (!res.ok) {
+  if (!json.success) {
     throw new Error(json.error || 'Lỗi thay đổi mật khẩu');
   }
   return json;
@@ -134,13 +149,12 @@ export async function resetStudentPasswordApi(studentId: string): Promise<{
   success: boolean;
   student: Student;
 }> {
-  const res = await fetch('/api/student/reset-password', {
+  const json = await safeFetchJson<any>('/api/student/reset-password', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ studentId }),
   });
-  const json = await res.json();
-  if (!res.ok) {
+  if (!json.success) {
     throw new Error(json.error || 'Lỗi đặt lại mật khẩu');
   }
   return json;
@@ -154,13 +168,12 @@ export async function submitExamApi(payload: {
   classCode: string;
   answers: any[];
 }): Promise<ExamSubmission> {
-  const res = await fetch('/api/submissions', {
+  const json = await safeFetchJson<any>('/api/submissions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  const json = await res.json();
-  if (!res.ok) {
+  if (!json.success) {
     throw new Error(json.error || 'Nộp bài thất bại');
   }
   return json.submission;
@@ -173,13 +186,12 @@ export async function summarizeDocumentApi(payload: {
   textContent?: string;
   files?: { base64: string; mimeType: string; name?: string }[];
 }) {
-  const res = await fetch('/api/gemini/extract-and-summarize', {
+  const json = await safeFetchJson<any>('/api/gemini/extract-and-summarize', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  const json = await res.json();
-  if (!res.ok) {
+  if (!json.success) {
     throw new Error(json.error || 'Lỗi xử lý tài liệu với Gemini AI');
   }
   return json.data;
@@ -196,16 +208,54 @@ export async function generateAIQuestionsApi(payload: {
   customPrompt?: string;
   files?: { base64: string; mimeType: string; name?: string }[];
 }): Promise<Question[]> {
-  const res = await fetch('/api/gemini/generate-questions', {
+  const json = await safeFetchJson<any>('/api/gemini/generate-questions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  const json = await res.json();
-  if (!res.ok && !json.questions) {
+  if (!json.success && !json.questions) {
     throw new Error(json.error || 'Lỗi sinh câu hỏi với Gemini AI');
   }
   return json.questions || [];
+}
+
+export async function generateExamMatrixApi(payload: {
+  subject: string;
+  grade: number;
+  examTitle: string;
+  durationMinutes: number;
+  scoreScale: number;
+  questionCount: number;
+  ratios: { biet: number; hieu: number; vanDung: number };
+  questionTypes: string[];
+  customRequirements?: string;
+}): Promise<{
+  matrix: {
+    bietCount: number;
+    hieuCount: number;
+    vanDungCount: number;
+    totalQuestions: number;
+    scoreScale: number;
+    durationMinutes: number;
+    bietScore: number;
+    hieuScore: number;
+    vanDungScore: number;
+    description: string;
+  };
+  questions: Question[];
+}> {
+  const json = await safeFetchJson<any>('/api/gemini/generate-exam-matrix', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!json.success) {
+    throw new Error(json.error || 'Lỗi biên soạn ma trận đề kiểm tra');
+  }
+  return {
+    matrix: json.matrix,
+    questions: json.questions,
+  };
 }
 
 // -------------------------------------------------------------
