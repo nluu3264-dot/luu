@@ -6,7 +6,6 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
 import { initialStoreData } from './src/data/initialData';
@@ -14,8 +13,8 @@ import { AppStoreData } from './src/types';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Note: In Node.js (CommonJS and tsx), __dirname and __filename are natively available as globals.
+// Avoid using import.meta.url which is undefined when bundled into CommonJS (.cjs).
 
 const app = express();
 const PORT = 3000;
@@ -677,7 +676,9 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = (typeof __dirname !== 'undefined' && fs.existsSync(path.join(__dirname, 'index.html')))
+      ? __dirname
+      : path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
