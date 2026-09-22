@@ -127,7 +127,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
       return;
     }
     const attempts = mySubmissions.filter((s) => s.examId === exam.id).length;
-    const maxAttempts = exam.maxAttempts || 1;
+    const maxAttempts = exam.maxAttempts !== undefined ? exam.maxAttempts : 1;
     if (maxAttempts > 0 && attempts >= maxAttempts) {
       alert(`Em đã hoàn thành tối đa số lần cho phép (${attempts}/${maxAttempts} lần).`);
       return;

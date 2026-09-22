@@ -171,7 +171,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               <>
                 <div className="p-3 bg-emerald-50/70 border border-emerald-100 rounded-xl text-xs text-emerald-800 mb-3">
                   <p className="font-semibold mb-0.5">Dành cho Học sinh:</p>
-                  <p className="text-emerald-700">Chỉ cần nhập chính xác Mã lớp và Mã học sinh do nhà trường cấp để vào ôn tập và làm bài.</p>
+                  <p className="text-emerald-700">Nhập Mã lớp và Mã học sinh (hoặc Họ tên) để vào ôn tập và làm bài. Hệ thống cho phép toàn bộ học sinh trong lớp làm bài không giới hạn sĩ số.</p>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -191,20 +191,20 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Mã Học Sinh (ví dụ: HS601, HS602...)
+                    Mã Học Sinh hoặc Họ và Tên (ví dụ: HS601, HS636, Nguyễn Văn A...)
                   </label>
                   <div className="relative">
                     <User className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                     <input
                       type="text"
                       required
-                      placeholder="HS601"
+                      placeholder="HS601 hoặc Họ và tên..."
                       value={studentCode}
                       onChange={(e) => {
-                        setStudentCode(e.target.value.toUpperCase());
+                        setStudentCode(e.target.value);
                         setStudentHasPassword(false);
                       }}
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono"
+                      className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
                     />
                   </div>
                 </div>

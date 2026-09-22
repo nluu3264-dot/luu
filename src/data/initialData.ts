@@ -6,11 +6,11 @@
 import { AppStoreData, Classroom, Student, Lesson, Question, Exam } from '../types';
 
 export const initialClassrooms: Classroom[] = [
-  { id: 'cls-6a1', classCode: '6A1', className: 'Lớp 6A1', grade: 6, academicYear: '2025-2026', studentCount: 35 },
-  { id: 'cls-6a2', classCode: '6A2', className: 'Lớp 6A2', grade: 6, academicYear: '2025-2026', studentCount: 34 },
-  { id: 'cls-7a1', classCode: '7A1', className: 'Lớp 7A1', grade: 7, academicYear: '2025-2026', studentCount: 36 },
-  { id: 'cls-8a1', classCode: '8A1', className: 'Lớp 8A1', grade: 8, academicYear: '2025-2026', studentCount: 38 },
-  { id: 'cls-9a1', classCode: '9A1', className: 'Lớp 9A1', grade: 9, academicYear: '2025-2026', studentCount: 35 },
+  { id: 'cls-6a1', classCode: '6A1', className: 'Lớp 6A1', grade: 6, academicYear: '2025-2026' },
+  { id: 'cls-6a2', classCode: '6A2', className: 'Lớp 6A2', grade: 6, academicYear: '2025-2026' },
+  { id: 'cls-7a1', classCode: '7A1', className: 'Lớp 7A1', grade: 7, academicYear: '2025-2026' },
+  { id: 'cls-8a1', classCode: '8A1', className: 'Lớp 8A1', grade: 8, academicYear: '2025-2026' },
+  { id: 'cls-9a1', classCode: '9A1', className: 'Lớp 9A1', grade: 9, academicYear: '2025-2026' },
 ];
 
 export const initialStudents: Student[] = [

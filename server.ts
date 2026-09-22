@@ -91,7 +91,19 @@ function getAI(): GoogleGenAI | null {
 
 // 1. Data Store APIs
 app.get('/api/data', (req, res) => {
-  res.json({ success: true, data: currentStore });
+  // Ensure classrooms always have dynamic studentCount reflecting store.students
+  const classroomsWithDynamicCount = currentStore.classrooms.map(c => ({
+    ...c,
+    studentCount: currentStore.students.filter(s => s.classCode.toUpperCase() === c.classCode.toUpperCase()).length
+  }));
+
+  res.json({
+    success: true,
+    data: {
+      ...currentStore,
+      classrooms: classroomsWithDynamicCount
+    }
+  });
 });
 
 app.post('/api/data', (req, res) => {
@@ -140,17 +152,47 @@ app.post('/api/auth/login', (req, res) => {
 
   if (role === 'student') {
     if (!classCode || !studentCode) {
-      return res.status(400).json({ success: false, error: 'Vui lòng nhập cả Mã Lớp và Mã Học Sinh!' });
+      return res.status(400).json({ success: false, error: 'Vui lòng nhập cả Mã Lớp và Mã Học Sinh (hoặc Họ tên)!' });
     }
     const cleanClass = String(classCode).trim().toUpperCase();
     const cleanStd = String(studentCode).trim().toUpperCase();
+    const rawStd = String(studentCode).trim();
 
-    const student = currentStore.students.find(
-      s => s.classCode.toUpperCase() === cleanClass && s.studentCode.toUpperCase() === cleanStd
+    // Find student by code or by fullName
+    let student = currentStore.students.find(
+      s => s.classCode.toUpperCase() === cleanClass && (
+        s.studentCode.toUpperCase() === cleanStd ||
+        s.fullName.trim().toLowerCase() === rawStd.toLowerCase()
+      )
     );
 
+    // Verify classroom exists
+    const classroom = currentStore.classrooms.find(c => c.classCode.toUpperCase() === cleanClass);
+    if (!classroom) {
+      return res.status(404).json({ success: false, error: `Không tìm thấy lớp học có mã: ${cleanClass}` });
+    }
+
+    // If student is not yet in roster, auto-enroll them into this class so NO student in the class is ever blocked!
+    if (!student && cleanStd) {
+      const isCodePattern = /^HS\d+/i.test(cleanStd);
+      const studentCodeVal = isCodePattern ? cleanStd : `HS${classroom.grade}${Date.now().toString().slice(-3)}`;
+      const fullNameVal = isCodePattern ? `Học sinh ${cleanStd}` : rawStd;
+
+      student = {
+        id: `std-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        studentCode: studentCodeVal,
+        fullName: fullNameVal,
+        classCode: cleanClass,
+        grade: classroom.grade,
+        password: '',
+        hasSetPassword: false,
+      };
+
+      currentStore.students.push(student);
+      saveStoreData(currentStore);
+    }
+
     if (student) {
-      const classroom = currentStore.classrooms.find(c => c.classCode.toUpperCase() === cleanClass);
       const studentPayload = {
         ...student,
         grade: student.grade || classroom?.grade || 6,
@@ -199,13 +241,7 @@ app.post('/api/auth/login', (req, res) => {
       });
     }
 
-    // Check if class exists
-    const classExists = currentStore.classrooms.some(c => c.classCode.toUpperCase() === cleanClass);
-    if (!classExists) {
-      return res.status(404).json({ success: false, error: `Không tìm thấy lớp học có mã: ${cleanClass}` });
-    }
-
-    return res.status(404).json({ success: false, error: `Mã học sinh "${cleanStd}" chưa tồn tại trong lớp "${cleanClass}". Vui lòng liên hệ giáo viên quản lý!` });
+    return res.status(404).json({ success: false, error: `Không thể đăng nhập vào lớp "${cleanClass}". Vui lòng thử lại!` });
   }
 
   res.status(400).json({ success: false, error: 'Vai trò đăng nhập không hợp lệ!' });
@@ -432,6 +468,24 @@ app.post('/api/submissions', (req, res) => {
       currentStore.submissions[existingIndex] = submission;
     } else {
       currentStore.submissions.push(submission);
+    }
+
+    // Ensure student is registered in store.students so they are fully tracked
+    const existingStudent = currentStore.students.find(
+      s => s.classCode.toUpperCase() === String(submission.classCode).toUpperCase() &&
+           s.studentCode.toUpperCase() === String(submission.studentCode).toUpperCase()
+    );
+    if (!existingStudent) {
+      const cls = currentStore.classrooms.find(c => c.classCode.toUpperCase() === String(submission.classCode).toUpperCase());
+      currentStore.students.push({
+        id: submission.studentId || `std-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        studentCode: String(submission.studentCode).trim().toUpperCase(),
+        fullName: String(submission.studentName || `Học sinh ${submission.studentCode}`).trim(),
+        classCode: String(submission.classCode).trim().toUpperCase(),
+        grade: cls ? cls.grade : submission.grade,
+        password: '',
+        hasSetPassword: false,
+      });
     }
 
     saveStoreData(currentStore);
