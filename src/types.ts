@@ -100,6 +100,7 @@ export interface Lesson {
   lessonNumber: number;
   title: string;
   theory: LessonTheory;
+  attachedFiles?: { name: string; base64: string; mimeType: string; uploadedAt?: string }[];
   createdAt: string;
   updatedAt?: string;
 }

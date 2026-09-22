@@ -186,9 +186,13 @@ export async function summarizeDocumentApi(payload: {
   textContent?: string;
   files?: { base64: string; mimeType: string; name?: string }[];
 }) {
-  const json = await safeFetchJson<any>('/api/gemini/extract-and-summarize', {
+  const json = await safeFetchJson<any>(`/api/gemini/extract-and-summarize?_t=${Date.now()}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache'
+    },
     body: JSON.stringify(payload),
   });
   if (!json.success) {
@@ -207,10 +211,16 @@ export async function generateAIQuestionsApi(payload: {
   questionTypes: string[];
   customPrompt?: string;
   files?: { base64: string; mimeType: string; name?: string }[];
+  previousQuestions?: string[];
+  seed?: number;
 }): Promise<Question[]> {
-  const json = await safeFetchJson<any>('/api/gemini/generate-questions', {
+  const json = await safeFetchJson<any>(`/api/gemini/generate-questions?_t=${Date.now()}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache'
+    },
     body: JSON.stringify(payload),
   });
   if (!json.success && !json.questions) {

@@ -441,35 +441,150 @@ app.post('/api/submissions', (req, res) => {
   }
 });
 
+// Helper to safely extract and prepare uploaded files for Gemini Multimodal API
+interface ProcessedFiles {
+  parts: Array<{ inlineData: { data: string; mimeType: string } }>;
+  extractedTexts: string[];
+  fileDescriptions: string[];
+}
+
+function processUploadedFiles(files: any[]): ProcessedFiles {
+  const parts: Array<{ inlineData: { data: string; mimeType: string } }> = [];
+  const extractedTexts: string[] = [];
+  const fileDescriptions: string[] = [];
+
+  if (!Array.isArray(files) || files.length === 0) {
+    return { parts, extractedTexts, fileDescriptions };
+  }
+
+  for (const f of files) {
+    if (!f || !f.base64) continue;
+    const fileName = (f.name || 'tai_lieu').trim();
+    const rawBase64 = String(f.base64).replace(/^data:[^;]+;base64,/, '').trim();
+    if (!rawBase64) continue;
+
+    let mime = (f.mimeType || '').toLowerCase().trim();
+    const lowerName = fileName.toLowerCase();
+
+    // Auto-detect MIME type accurately
+    if (!mime || mime === 'application/octet-stream' || mime === 'application/x-download' || mime === 'binary/octet-stream') {
+      if (lowerName.endsWith('.pdf')) mime = 'application/pdf';
+      else if (lowerName.endsWith('.png')) mime = 'image/png';
+      else if (lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg')) mime = 'image/jpeg';
+      else if (lowerName.endsWith('.webp')) mime = 'image/webp';
+      else if (lowerName.endsWith('.gif')) mime = 'image/gif';
+      else if (lowerName.endsWith('.txt') || lowerName.endsWith('.md')) mime = 'text/plain';
+      else if (lowerName.endsWith('.doc') || lowerName.endsWith('.docx')) mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+
+    // Inspect magic base64 headers
+    if (rawBase64.startsWith('JVBERi')) {
+      mime = 'application/pdf';
+    } else if (rawBase64.startsWith('iVBORw0KGgo')) {
+      mime = 'image/png';
+    } else if (rawBase64.startsWith('/9j/')) {
+      mime = 'image/jpeg';
+    }
+
+    if (mime === 'application/pdf') {
+      // PDF file: Send inlineData directly so Gemini multimodal processes layout, tables, diagrams and text
+      parts.push({
+        inlineData: {
+          data: rawBase64,
+          mimeType: 'application/pdf',
+        },
+      });
+      fileDescriptions.push(`Tệp PDF SGK/Giáo án: "${fileName}" (đã gửi trực tiếp inlineData đến Gemini)`);
+    } else if (mime.startsWith('image/')) {
+      // Image file: Send inlineData directly
+      parts.push({
+        inlineData: {
+          data: rawBase64,
+          mimeType: mime,
+        },
+      });
+      fileDescriptions.push(`Ảnh tư liệu/trang sách: "${fileName}" (đã gửi trực tiếp inlineData)`);
+    } else {
+      // Plain text or markdown
+      try {
+        const decoded = Buffer.from(rawBase64, 'base64').toString('utf-8');
+        if (decoded && !/[\x00-\x08\x0E-\x1F]/.test(decoded.slice(0, 500))) {
+          extractedTexts.push(`--- NỘI DUNG TÀI LIỆU ("${fileName}") ---\n${decoded.slice(0, 40000)}`);
+          fileDescriptions.push(`Tài liệu văn bản: "${fileName}" (${decoded.length} ký tự trích xuất)`);
+        } else {
+          if (lowerName.endsWith('.pdf')) {
+            parts.push({
+              inlineData: {
+                data: rawBase64,
+                mimeType: 'application/pdf',
+              },
+            });
+            fileDescriptions.push(`Tệp PDF: "${fileName}"`);
+          }
+        }
+      } catch (e) {
+        console.warn('Cannot decode file attachment text', e);
+      }
+    }
+  }
+
+  return { parts, extractedTexts, fileDescriptions };
+}
+
 // 4. Gemini Multimodal Document Extraction & Theory Summarization
 app.post('/api/gemini/extract-and-summarize', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   try {
     const body = req.body || {};
     const { subject = 'lich-su', grade = 6, lessonTitle = '', textContent = '', files = [] } = body;
     const ai = getAI();
 
+    const { parts, extractedTexts, fileDescriptions } = processUploadedFiles(files);
+    const hasDocuments = fileDescriptions.length > 0 || extractedTexts.length > 0 || Boolean(textContent);
+
+    let docNotice = '';
+    if (hasDocuments) {
+      docNotice = `
+======================================================================
+CHỈ THỊ QUAN TRỌNG VỀ TÀI LIỆU ĐÍNH KÈM (BẮT BUỘC TUÂN THỦ 100%):
+- Người dùng đã tải lên các tài liệu học tập sau:
+${fileDescriptions.map((d) => `  * ${d}`).join('\n') || '  * Văn bản đính kèm'}
+- QUY TẮC BẮT BUỘC: Bạn PHẢI đọc kỹ nội dung tài liệu đính kèm (các trang PDF inlineData / văn bản trích xuất).
+- Mọi nội dung tóm tắt (summary), các ý kiến thức cốt lõi (keyPoints), các sự kiện mốc thời gian / số liệu / đặc điểm (timelineOrFacts) PHẢI ĐƯỢC TRÍCH XUẤT TRỰC TIẾP từ tài liệu được cung cấp.
+- TUYỆT ĐỐI KHÔNG dùng kiến thức chung chung khái quát ngoài tài liệu nếu tài liệu đã có nội dung cụ thể.
+======================================================================
+`;
+    }
+
     const promptText = `Bạn là chuyên gia giáo dục THCS chuyên môn ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp ${grade} của Việt Nam theo chương trình Giáo dục Phổ thông 2018 (SGK Kết nối tri thức, Chân trời sáng tạo, Cánh Diều).
 Hãy phân tích tài liệu/văn bản được cung cấp và trích xuất/tóm tắt nội dung ôn tập lý thuyết chuẩn mực cho bài học: "${lessonTitle || 'Bài học theo tài liệu'}".
-
+${docNotice}
 Yêu cầu tóm tắt gồm:
-1. title: Tên chuẩn của bài học (ví dụ: "Bài 1: ...")
-2. summary: Tóm tắt ngắn gọn khái quát nội dung trọng tâm (khoảng 3-5 câu).
-3. keyPoints: Danh sách 4-7 ý kiến thức cốt lõi, cô đọng, dễ nhớ cho học sinh THCS.
-4. timelineOrFacts: Danh sách 3-5 sự kiện mốc thời gian (với Lịch sử) hoặc quy luật/số liệu/đặc điểm địa lí nổi bật (với Địa lí), mỗi mục gồm { title, content }.
+1. title: Tên chuẩn của bài học theo tài liệu (ví dụ: "Bài 1: ...")
+2. summary: Tóm tắt ngắn gọn khái quát nội dung trọng tâm bài học (khoảng 3-5 câu), bám sát nội dung tài liệu.
+3. keyPoints: Danh sách 4-7 ý kiến thức cốt lõi, cô đọng, dễ nhớ cho học sinh THCS lấy trực tiếp từ bài học.
+4. timelineOrFacts: Danh sách 3-5 sự kiện mốc thời gian (với Lịch sử) hoặc quy luật/số liệu/đặc điểm địa lí nổi bật (với Địa lí), mỗi mục gồm { title, content } trích xuất chuẩn xác từ tài liệu.
 
-Nội dung văn bản đính kèm:
-${textContent || '(Tài liệu được gửi qua file đính kèm)'}
+Nội dung văn bản trực tiếp (nếu có):
+${textContent || '(Tài liệu chi tiết nằm trong file đính kèm inlineData)'}
 `;
 
     if (!ai) {
-      // High quality offline fallback
+      // Offline fallback extracting from available text or intelligent template
+      const fallbackSummary = textContent
+        ? `Tóm tắt trích xuất: ${textContent.slice(0, 300)}...`
+        : `Tóm tắt nội dung trọng tâm bài học "${lessonTitle || 'Lịch sử - Địa lí'}" lớp ${grade}. Học sinh cần nắm vững các sự kiện, nguyên nhân, diễn biến và ý nghĩa cơ bản (hoặc các đặc điểm vị trí, địa hình, khí hậu theo chương trình GDPT 2018).`;
+
       return res.json({
         success: true,
         data: {
           title: lessonTitle || `Bài học ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp ${grade}`,
-          summary: `Tóm tắt nội dung trọng tâm bài học theo tài liệu đã tải lên. Học sinh cần nắm vững các sự kiện, nguyên nhân, diễn biến và ý nghĩa cơ bản (hoặc các đặc điểm vị trí, địa hình, khí hậu).`,
+          summary: fallbackSummary,
           keyPoints: [
-            'Kiến thức trọng tâm 1: Xác định rõ mốc thời gian hoặc vị trí địa lí quan trọng.',
+            `Kiến thức trọng tâm 1 bài học "${lessonTitle || 'Lịch sử - Địa lí'}": Xác định rõ mốc thời gian hoặc vị trí địa lí quan trọng.`,
             'Kiến thức trọng tâm 2: Phân tích được nguyên nhân cốt lõi và mối liên hệ thực tế.',
             'Kiến thức trọng tâm 3: Hiểu được tác động đối với đời sống con người và sự phát triển xã hội.',
             'Kiến thức trọng tâm 4: Rút ra bài học lịch sử hoặc giải pháp bảo vệ môi trường, phát triển bền vững.'
@@ -479,42 +594,26 @@ ${textContent || '(Tài liệu được gửi qua file đính kèm)'}
             { title: 'Sự kiện / Đặc điểm 2', content: 'Hiện tượng hoặc kết quả mang tính bước ngoặt.' },
             { title: 'Sự kiện / Đặc điểm 3', content: 'Ý nghĩa lịch sử hoặc giá trị kinh tế - xã hội to lớn.' }
           ]
-        }
+        },
+        warning: 'Đang dùng bộ tóm tắt dự phòng do chưa cấu hình GEMINI_API_KEY.'
       });
     }
 
     const contents: any[] = [];
-    if (Array.isArray(files) && files.length > 0) {
-      for (const f of files) {
-        if (f && f.base64) {
-          const rawBase64 = String(f.base64).replace(/^data:[^;]+;base64,/, '');
-          const mime = f.mimeType || 'application/pdf';
-          if (mime.startsWith('image/') || mime === 'application/pdf') {
-            contents.push({
-              inlineData: {
-                data: rawBase64,
-                mimeType: mime
-              }
-            });
-          } else {
-            try {
-              const decodedText = Buffer.from(rawBase64, 'base64').toString('utf-8');
-              if (decodedText && !/[\x00-\x08\x0E-\x1F]/.test(decodedText.slice(0, 500))) {
-                contents.push({ text: `Tài liệu đính kèm ("${f.name || 'tài liệu'}"):\n${decodedText.slice(0, 30000)}` });
-              }
-            } catch (e) {
-              console.warn('Cannot decode text file attachment', e);
-            }
-          }
-        }
-      }
+    for (const part of parts) {
+      contents.push(part);
     }
-    contents.push({ text: promptText });
+    let fullPrompt = promptText;
+    if (extractedTexts.length > 0) {
+      fullPrompt = `${extractedTexts.join('\n\n')}\n\n${fullPrompt}`;
+    }
+    contents.push({ text: fullPrompt });
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: contents,
       config: {
+        temperature: 0.2, // Low temperature for faithful factual extraction
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -552,6 +651,10 @@ ${textContent || '(Tài liệu được gửi qua file đính kèm)'}
 
 // 5. Gemini AI Question Generator (Diverse question types, Cognitive levels: Biết, Hiểu, Vận dụng, 5-30 questions)
 app.post('/api/gemini/generate-questions', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   try {
     const body = req.body || {};
     const {
@@ -563,21 +666,59 @@ app.post('/api/gemini/generate-questions', async (req, res) => {
       ratios = { biet: 40, hieu: 40, vanDung: 20 },
       questionTypes = ['multiple-choice', 'true-false', 'matching', 'short-answer', 'fill-in-blank'],
       customPrompt = '',
-      files = []
+      files = [],
+      previousQuestions = []
     } = body;
 
-    // Validate count between 5 and 30 as requested
     const validCount = Math.max(5, Math.min(30, Number(count) || 10));
     const ai = getAI();
 
+    const { parts, extractedTexts, fileDescriptions } = processUploadedFiles(files);
+    const hasDocuments = fileDescriptions.length > 0 || extractedTexts.length > 0;
+
+    // Document instruction block
+    let documentInstruction = '';
+    if (hasDocuments) {
+      documentInstruction = `
+======================================================================
+CẢNH BÁO QUAN TRỌNG VỀ TÀI LIỆU ĐÍNH KÈM (BẮT BUỘC TUÂN THỦ 100%):
+- Giáo viên đã đính kèm ${fileDescriptions.length} tệp tài liệu:
+${fileDescriptions.map((d) => `  * ${d}`).join('\n')}
+- NGUYÊN TẮC CỐT LÕI:
+  1. BẮT BUỘC PHẢI DỰA SÁT VÀO NỘI DUNG TÀI LIỆU ĐƯỢC CUNG CẤP (các trang PDF inlineData / văn bản đính kèm).
+  2. Mọi câu hỏi, dữ liệu, số liệu, mốc thời gian, tên nhân vật, địa danh, định nghĩa, thuật ngữ, chi tiết sự kiện, phương án đúng và phương án gây nhiễu PHẢI LẤY TRỰC TIẾP từ tài liệu tải lên.
+  3. TUYỆT ĐỐI KHÔNG dùng kiến thức chung ngoài tài liệu nếu tài liệu đã có thông tin liên quan hoặc sinh câu hỏi khái quát bâng quơ không gắn liền với tài liệu.
+  4. Trích dẫn rõ các tình huống, đoạn trích, bảng số liệu hoặc sơ đồ có trong tài liệu khi đặt câu hỏi.
+======================================================================
+`;
+    }
+
+    // Diversity & non-repetition block
+    let diversityInstruction = `
+======================================================================
+YÊU CẦU ĐA DẠNG HÓA VÀ TRÁNH LẶP LẠI (TẠO MỚI HOÀN TOÀN):
+- Tạo các câu hỏi MỚI, ĐA DẠNG, khai thác nhiều khía cạnh/nội dung, chi tiết khác nhau trong bài học/tài liệu (từ mở đầu, hoàn cảnh, nguyên nhân, diễn biến, kết quả, số liệu, ý nghĩa, bản đồ đến bài học thực tiễn).
+- Tránh lặp lại cấu trúc ngữ pháp đơn điệu hoặc nội dung của các câu hỏi phổ biến/hiển nhiên.
+`;
+
+    if (Array.isArray(previousQuestions) && previousQuestions.length > 0) {
+      diversityInstruction += `
+- DANH SÁCH CÁC CÂU HỎI ĐÃ CÓ / CẦN TRÁNH TRÙNG LẶP (TUYỆT ĐỐI KHÔNG ĐƯỢC LẶP LẠI HOẶC TƯƠNG TỰ):
+${previousQuestions.slice(-25).map((q: string, idx: number) => `  [Đã có ${idx + 1}] ${q}`).join('\n')}
+- BẮT BUỘC tạo các câu hỏi HOÀN TOÀN MỚI, khai thác các chi tiết, sự kiện, góc nhìn khác hẳn với danh sách trên.
+`;
+    }
+    diversityInstruction += `======================================================================\n`;
+
     const promptText = `Bạn là chuyên gia khảo thí và biên soạn đề thi môn ${subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} THCS lớp ${grade} của Bộ Giáo dục và Đào tạo Việt Nam.
 Hãy tạo chính xác ${validCount} câu hỏi ôn tập và kiểm tra chất lượng cao cho bài học: "${lessonTitle || 'Chương trình THCS'}".
-
+${documentInstruction}
+${diversityInstruction}
 YÊU CẦU BẮT BUỘC:
 1. Phân loại chuẩn xác theo 3 mức độ nhận thức:
-   - "biet" (Nhận biết): Nhớ sự kiện, mốc thời gian, định nghĩa, số liệu, vị trí địa lí cơ bản.
-   - "hieu" (Thông hiểu): Giải thích nguyên nhân, so sánh, phân tích đặc điểm, rút ra kết luận.
-   - "van-dung" (Vận dụng): Liên hệ thực tiễn Việt Nam hoặc thế giới, xử lý tình huống, bài học kinh nghiệm, kiến thức liên môn.
+   - "biet" (Nhận biết): Nhớ sự kiện, mốc thời gian, định nghĩa, số liệu, vị trí địa lí cơ bản nêu trong tài liệu.
+   - "hieu" (Thông hiểu): Giải thích nguyên nhân, so sánh, phân tích đặc điểm, rút ra kết luận dựa vào tài liệu.
+   - "van-dung" (Vận dụng): Liên hệ thực tiễn Việt Nam hoặc địa phương, xử lý tình huống, bài học kinh nghiệm từ nội dung bài học.
    Tỉ lệ phân bổ mục tiêu: ~${ratios.biet || 40}% Biết, ~${ratios.hieu || 40}% Hiểu, ~${ratios.vanDung || 20}% Vận dụng.
 
 2. Đa dạng hóa các dạng câu hỏi từ danh sách cho phép [${questionTypes.join(', ')}]:
@@ -588,49 +729,46 @@ YÊU CẦU BẮT BUỘC:
    - fill-in-blank: Đoạn văn hoặc câu có từ khuyết trong ngoặc vuông [từ_khóa], cung cấp acceptableAnswers.
    - essay: Câu hỏi tự luận kích thích tư duy, kèm essayGuide chi tiết biểu điểm gợi ý chấm.
 
-3. Kèm explanation giải thích đáp án ngắn gọn, sư phạm cho từng câu.
+3. Kèm explanation giải thích đáp án ngắn gọn, sư phạm cho từng câu (nêu rõ căn cứ từ nội dung bài học/tài liệu).
 ${customPrompt ? `Yêu cầu thêm từ giáo viên: ${customPrompt}` : ''}
 ${lessonTheory ? `Kiến thức nền tảng:\n${typeof lessonTheory === 'string' ? lessonTheory : JSON.stringify(lessonTheory)}` : ''}
 `;
 
     if (!ai) {
-      // Generate intelligent simulated questions matching exact requirements
-      const fallbackQuestions = generateFallbackQuestions(subject, grade, lessonTitle, validCount, ratios);
-      return res.json({ success: true, questions: fallbackQuestions });
+      // Dynamic fallback generator
+      const fallbackQuestions = generateFallbackQuestions(
+        subject,
+        grade,
+        lessonTitle,
+        validCount,
+        ratios,
+        lessonTheory,
+        previousQuestions,
+        extractedTexts
+      );
+      return res.json({
+        success: true,
+        questions: fallbackQuestions,
+        warning: 'Đang dùng bộ sinh câu hỏi thông minh nội bộ do chưa cấu hình GEMINI_API_KEY. Vui lòng cấu hình GEMINI_API_KEY để kích hoạt Gemini 3.8 Flash đọc file PDF.'
+      });
     }
 
     const contents: any[] = [];
-    if (Array.isArray(files) && files.length > 0) {
-      for (const f of files) {
-        if (f && f.base64) {
-          const rawBase64 = String(f.base64).replace(/^data:[^;]+;base64,/, '');
-          const mime = f.mimeType || 'application/pdf';
-          if (mime.startsWith('image/') || mime === 'application/pdf') {
-            contents.push({
-              inlineData: {
-                data: rawBase64,
-                mimeType: mime
-              }
-            });
-          } else {
-            try {
-              const decodedText = Buffer.from(rawBase64, 'base64').toString('utf-8');
-              if (decodedText && !/[\x00-\x08\x0E-\x1F]/.test(decodedText.slice(0, 500))) {
-                contents.push({ text: `Tài liệu đính kèm ("${f.name || 'tài liệu'}"):\n${decodedText.slice(0, 30000)}` });
-              }
-            } catch (e) {
-              console.warn('Cannot decode text file attachment', e);
-            }
-          }
-        }
-      }
+    for (const part of parts) {
+      contents.push(part);
     }
-    contents.push({ text: promptText });
+    let fullPrompt = promptText;
+    if (extractedTexts.length > 0) {
+      fullPrompt = `${extractedTexts.join('\n\n')}\n\n${fullPrompt}`;
+    }
+    contents.push({ text: fullPrompt });
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: contents,
       config: {
+        temperature: 0.85, // Higher temperature for rich diversity and creativity
+        topP: 0.95,
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.ARRAY,
@@ -692,7 +830,7 @@ ${lessonTheory ? `Kiến thức nền tảng:\n${typeof lessonTheory === 'string
     const parsed = JSON.parse(response.text?.trim() || '[]');
     const formatted = parsed.map((q: any, idx: number) => ({
       ...q,
-      id: `ai-q-${Date.now()}-${idx}`,
+      id: `ai-q-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 7)}`,
       subject,
       grade,
       lessonId: body.lessonId || 'custom',
@@ -705,7 +843,15 @@ ${lessonTheory ? `Kiến thức nền tảng:\n${typeof lessonTheory === 'string
     console.error('Gemini generate questions error:', err);
     const body = req.body || {};
     const validCount = Math.max(5, Math.min(30, Number(body.count) || 10));
-    const fallbackQuestions = generateFallbackQuestions(body.subject || 'lich-su', body.grade || 6, body.lessonTitle || '', validCount, body.ratios || {});
+    const fallbackQuestions = generateFallbackQuestions(
+      body.subject || 'lich-su',
+      body.grade || 6,
+      body.lessonTitle || '',
+      validCount,
+      body.ratios || {},
+      body.lessonTheory,
+      body.previousQuestions
+    );
     return res.json({ success: true, questions: fallbackQuestions, warning: err.message });
   }
 });
@@ -846,55 +992,134 @@ ${customRequirements ? `Yêu cầu thêm từ giáo viên: ${customRequirements}
   }
 });
 
-// Helper for generating diverse fallback questions when API key is unavailable
-function generateFallbackQuestions(subject: string, grade: number, lessonTitle: string, count: number, ratios: any) {
+// Helper for generating diverse fallback questions when API key is unavailable or fails
+function generateFallbackQuestions(
+  subject: string,
+  grade: number,
+  lessonTitle: string,
+  count: number,
+  ratios: any,
+  lessonTheory?: any,
+  previousQuestions: string[] = [],
+  extractedTexts: string[] = []
+) {
   const result: any[] = [];
-  const bietCount = Math.round((ratios.biet || 40) / 100 * count);
-  const hieuCount = Math.round((ratios.hieu || 40) / 100 * count);
+  const bietCount = Math.round(((ratios.biet || 40) / 100) * count);
+  const hieuCount = Math.round(((ratios.hieu || 40) / 100) * count);
   const vanDungCount = Math.max(1, count - bietCount - hieuCount);
 
-  let qIndex = 1;
   const isHistory = subject === 'lich-su';
+  const prevSet = new Set((previousQuestions || []).map((q) => q.trim().toLowerCase()));
+
+  // Extract knowledge points from current lesson in store or passed theory
+  const foundLesson = (currentStore.lessons || []).find(
+    (l: any) => l.subject === subject && Number(l.grade) === Number(grade) && (l.title === lessonTitle || lessonTitle.includes(l.title))
+  );
+
+  const activeTheory = foundLesson?.theory || (typeof lessonTheory === 'object' ? lessonTheory : null);
+  const keyPoints: string[] = activeTheory?.keyPoints || [
+    'Xác định rõ mốc thời gian, không gian địa lí và bối cảnh lịch sử diễn ra.',
+    'Phân tích được nguyên nhân trực tiếp và sâu xa dẫn đến sự chuyển biến.',
+    'Nắm vững diễn biến chính, các sự kiện tiêu biểu và ý nghĩa quan trọng.',
+    'Rút ra bài học kinh nghiệm, giải pháp phát triển bền vững hoặc liên hệ thực tế.',
+  ];
+
+  const facts: Array<{ title: string; content: string }> = activeTheory?.timelineOrFacts || [
+    { title: 'Sự kiện / Đặc điểm mốc', content: 'Chi tiết quan trọng bám sát nội dung chương trình GDPT 2018.' },
+    { title: 'Tác động / Kết quả', content: 'Tạo nên bước ngoặt lớn về mặt kinh tế, chính trị hoặc văn hóa - xã hội.' },
+    { title: 'Giá trị / Ý nghĩa', content: 'Để lại di sản và bài học sâu sắc cho các thế hệ mai sau.' },
+  ];
+
+  let qIndex = 1;
+  const usedTexts = new Set<string>();
+
+  const isUnique = (text: string) => {
+    const clean = text.trim().toLowerCase();
+    if (prevSet.has(clean) || usedTexts.has(clean)) return false;
+    usedTexts.add(clean);
+    return true;
+  };
+
+  // Helper shuffle array
+  const shuffle = <T>(array: T[]): T[] => {
+    const arr = [...array];
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  };
 
   // 1. Generate "Biết" questions
   for (let i = 0; i < bietCount; i++) {
-    if (i % 2 === 0) {
-      result.push({
-        id: `gen-q-${Date.now()}-${qIndex++}`,
-        subject,
-        grade,
-        lessonName: lessonTitle || `Bài ôn tập ${grade}`,
-        type: 'multiple-choice',
-        cognitiveLevel: 'biet',
-        questionText: isHistory
-          ? `[Nhận biết] Sự kiện lịch sử tiêu biểu gắn liền với bài học "${lessonTitle || 'Lịch sử THCS'}" diễn ra vào khoảng thời gian nào?`
-          : `[Nhận biết] Đặc điểm tự nhiên cơ bản nào sau đây đúng với nội dung bài học "${lessonTitle || 'Địa lí THCS'}"?`,
-        options: [
-          'Phương án A: Khẳng định sự kiện/đặc điểm đúng theo sách giáo khoa',
-          'Phương án B: Nhận định không chính xác về mặt thời gian/không gian',
-          'Phương án C: Dữ liệu bị thay đổi về tên gọi hoặc phạm vi',
-          'Phương án D: Hiện tượng diễn ra ở khu vực hoàn toàn khác'
-        ],
-        correctAnswers: [0],
-        explanation: 'Đây là kiến thức nhận biết trọng tâm được quy định trong SGK.',
-        createdAt: new Date().toISOString()
-      });
+    const pt = keyPoints[i % keyPoints.length];
+    const fact = facts[i % facts.length];
+
+    if (i % 3 === 0) {
+      const qText = isHistory
+        ? `[Nhận biết] Theo nội dung bài học "${lessonTitle}", sự kiện nào sau đây là đặc điểm nổi bật gắn liền với "${fact.title}"?`
+        : `[Nhận biết] Trong bài học "${lessonTitle}", yếu tố địa lí tự nhiên nào sau đây đóng vai trò nền tảng gắn liền với "${fact.title}"?`;
+
+      if (isUnique(qText) || i >= bietCount - 1) {
+        const correct = fact.content;
+        const distractors = [
+          isHistory ? 'Diễn ra vào thời kì hiện đại với quy mô toàn cầu' : 'Thuộc đới khí hậu băng giá quanh năm không có cư dân sinh sống',
+          isHistory ? 'Chỉ diễn ra trong phạm vi một làng xã nhỏ không gây ảnh hưởng' : 'Địa hình hoàn toàn là hoang mạc cát nóng không có sông ngòi',
+          isHistory ? 'Là chính sách áp đặt từ thời kì thực dân phương Tây thế kỉ XIX' : 'Khu vực có lượng mưa trung bình dưới 50mm/năm quanh năm khô hạn'
+        ];
+        const allOpts = shuffle([correct, ...distractors]);
+        const correctIdx = allOpts.indexOf(correct);
+
+        result.push({
+          id: `gen-q-${Date.now()}-${qIndex++}`,
+          subject,
+          grade,
+          lessonName: lessonTitle || `Bài ôn tập ${grade}`,
+          type: 'multiple-choice',
+          cognitiveLevel: 'biet',
+          questionText: qText,
+          options: allOpts,
+          correctAnswers: [correctIdx],
+          explanation: `Kiến thức nhận biết trong SGK: ${fact.title} - ${fact.content}.`,
+          createdAt: new Date().toISOString()
+        });
+      }
+    } else if (i % 3 === 1) {
+      const qText = `[Nhận biết] Đánh giá tính Đúng/Sai của các nhận định dưới đây liên quan đến bài học "${lessonTitle}":`;
+      if (isUnique(qText) || i >= bietCount - 1) {
+        result.push({
+          id: `gen-q-${Date.now()}-${qIndex++}`,
+          subject,
+          grade,
+          lessonName: lessonTitle || `Bài ôn tập ${grade}`,
+          type: 'true-false',
+          cognitiveLevel: 'biet',
+          questionText: qText,
+          statements: [
+            { statement: `Nội dung cốt lõi: ${pt}`, isCorrect: true },
+            { statement: `Chi tiết tiêu biểu: ${fact.content}`, isCorrect: true },
+            { statement: isHistory ? 'Sự kiện này hoàn toàn không có ý nghĩa gì đối với tiến trình phát triển.' : 'Khu vực này hoàn toàn không chịu tác động của quy luật tự nhiên.', isCorrect: false },
+            { statement: isHistory ? 'Đây là cuộc vận động chính trị diễn ra vào cuối thế kỉ XX.' : 'Đặc điểm này xuất hiện ở mọi vùng lãnh thổ trên thế giới mà không có sự phân hóa.', isCorrect: false }
+          ],
+          explanation: 'Học sinh nhận biết chính xác thông tin cơ bản được ghi nhận trong sách giáo khoa.',
+          createdAt: new Date().toISOString()
+        });
+      }
     } else {
+      const qText = isHistory
+        ? `[Nhận biết] Điền cụm từ còn thiếu vào nhận định sau: "Trong bài học ${lessonTitle}, mốc sự kiện quan trọng nhất là [${fact.title}] gắn với ý nghĩa lịch sử to lớn."`
+        : `[Nhận biết] Điền từ còn thiếu vào nhận định sau: "Đặc điểm nổi bật trong bài học ${lessonTitle} là [${fact.title}] tạo nên cảnh quan đặc thù."`;
+
       result.push({
         id: `gen-q-${Date.now()}-${qIndex++}`,
         subject,
         grade,
         lessonName: lessonTitle || `Bài ôn tập ${grade}`,
-        type: 'true-false',
+        type: 'fill-in-blank',
         cognitiveLevel: 'biet',
-        questionText: `[Nhận biết] Đánh giá tính Đúng/Sai của các nhận định dưới đây về "${lessonTitle || 'bài học'}":`,
-        statements: [
-          { statement: 'Nhận định 1: Dữ liệu lịch sử/địa lí chuẩn xác theo sách giáo khoa.', isCorrect: true },
-          { statement: 'Nhận định 2: Sự kiện này diễn ra sau thời kì cận đại.', isCorrect: false },
-          { statement: 'Nhận định 3: Đây là một trong những nền tảng quan trọng của bài học.', isCorrect: true },
-          { statement: 'Nhận định 4: Không có tác động nào đến đời sống xã hội.', isCorrect: false }
-        ],
-        explanation: 'Nhận biết các yếu tố cốt lõi của nội dung bài học.',
+        questionText: qText,
+        acceptableAnswers: [fact.title.toLowerCase(), fact.title],
+        explanation: `Từ khóa nhận biết chính xác là: "${fact.title}".`,
         createdAt: new Date().toISOString()
       });
     }
@@ -902,7 +1127,14 @@ function generateFallbackQuestions(subject: string, grade: number, lessonTitle: 
 
   // 2. Generate "Hiểu" questions
   for (let i = 0; i < hieuCount; i++) {
+    const pt = keyPoints[(i + 1) % keyPoints.length];
+    const fact = facts[(i + 1) % facts.length];
+
     if (i % 2 === 0) {
+      const qText = isHistory
+        ? `[Thông hiểu] Hãy nối nội dung ở cột A (Sự kiện / Hiện tượng) với cột B (Nguyên nhân / Ý nghĩa) theo bài học "${lessonTitle}":`
+        : `[Thông hiểu] Hãy nối khu vực / yếu tố ở cột A với đặc điểm tương ứng ở cột B theo bài học "${lessonTitle}":`;
+
       result.push({
         id: `gen-q-${Date.now()}-${qIndex++}`,
         subject,
@@ -910,30 +1142,39 @@ function generateFallbackQuestions(subject: string, grade: number, lessonTitle: 
         lessonName: lessonTitle || `Bài ôn tập ${grade}`,
         type: 'matching',
         cognitiveLevel: 'hieu',
-        questionText: isHistory
-          ? `[Thông hiểu] Hãy nối các sự kiện/nhân vật ở cột A với nguyên nhân/kết quả tương ứng ở cột B:`
-          : `[Thông hiểu] Hãy nối các khu vực địa lí ở cột A với đặc điểm khí hậu/địa hình ở cột B:`,
+        questionText: qText,
         matchingPairs: [
-          { left: isHistory ? 'Phong trào / Sự kiện 1' : 'Khu vực đồng bằng', right: isHistory ? 'Tạo tiền đề thắng lợi to lớn' : 'Địa hình bằng phẳng, đất phù sa màu mỡ' },
-          { left: isHistory ? 'Chính sách cải cách' : 'Khu vực đồi núi', right: isHistory ? 'Thúc đẩy kinh tế hàng hóa' : 'Giàu khoáng sản và tiềm năng thủy điện' },
-          { left: isHistory ? 'Hiệp định hòa bình' : 'Vùng duyên hải', right: isHistory ? 'Khẳng định độc lập chủ quyền' : 'Thuận lợi phát triển kinh tế biển và du lịch' }
+          { left: fact.title, right: fact.content },
+          { left: isHistory ? 'Nguyên nhân bùng nổ' : 'Nhân tố chi phối', right: pt },
+          { left: isHistory ? 'Bài học rút ra' : 'Tác động môi trường', right: isHistory ? 'Khẳng định sức mạnh khối đại đoàn kết' : 'Ảnh hưởng sâu sắc đến sinh kế dân cư' }
         ],
-        explanation: 'Thông hiểu mối quan hệ nhân quả và sự tương quan giữa các yếu tố.',
+        explanation: 'Thông hiểu mối liên hệ bản chất và mối quan hệ nhân quả trong bài học.',
         createdAt: new Date().toISOString()
       });
     } else {
+      const qText = isHistory
+        ? `[Thông hiểu] Tại sao sự kiện trong bài học "${lessonTitle}" lại được đánh giá là một bước ngoặt quan trọng?`
+        : `[Thông hiểu] Giải thích vì sao đặc điểm tự nhiên trong bài học "${lessonTitle}" lại có sự phân hóa rõ rệt?`;
+
+      const correct = `Bởi vì nội dung này làm thay đổi bản chất: ${pt.slice(0, 100)}.`;
+      const distractors = [
+        'Bởi vì nó diễn ra hoàn toàn tình cờ mà không chịu sự chi phối của bất kì quy luật nào.',
+        'Vì nó chỉ tồn tại trong thời gian rất ngắn dưới một tháng rồi hoàn toàn biến mất.',
+        'Vì không có bất kì mối quan hệ nào với điều kiện kinh tế - xã hội xung quanh.'
+      ];
+      const allOpts = shuffle([correct, ...distractors]);
+
       result.push({
         id: `gen-q-${Date.now()}-${qIndex++}`,
         subject,
         grade,
         lessonName: lessonTitle || `Bài ôn tập ${grade}`,
-        type: 'short-answer',
+        type: 'multiple-choice',
         cognitiveLevel: 'hieu',
-        questionText: isHistory
-          ? `[Thông hiểu] Điền cụm từ ngắn gọn chỉ nguyên nhân sâu xa dẫn đến sự chuyển biến trong bài học "${lessonTitle}":`
-          : `[Thông hiểu] Nêu tên đới khí hậu hoặc nhân tố tự nhiên đóng vai trò chi phối chủ yếu trong bài học:`,
-        acceptableAnswers: ['nguyên nhân kinh tế', 'nhiệt đới gió mùa', 'quy luật tự nhiên'],
-        explanation: 'Giải thích bản chất vấn đề qua việc tóm lược từ khóa chính xác.',
+        questionText: qText,
+        options: allOpts,
+        correctAnswers: [allOpts.indexOf(correct)],
+        explanation: 'Học sinh giải thích được nguyên nhân và bản chất vấn đề thay vì chỉ ghi nhớ máy móc.',
         createdAt: new Date().toISOString()
       });
     }
@@ -941,7 +1182,23 @@ function generateFallbackQuestions(subject: string, grade: number, lessonTitle: 
 
   // 3. Generate "Vận dụng" questions
   for (let i = 0; i < vanDungCount; i++) {
+    const pt = keyPoints[(i + 2) % keyPoints.length];
+
     if (i % 2 === 0) {
+      const qText = isHistory
+        ? `[Vận dụng] Từ bài học lịch sử "${lessonTitle}", bài học kinh nghiệm nào có thể vận dụng vào công cuộc xây dựng và bảo vệ Tổ quốc ngày nay?`
+        : `[Vận dụng] Vận dụng kiến thức bài học "${lessonTitle}", giải pháp nào là thiết thực nhất để bảo vệ môi trường và ứng phó biến đổi khí hậu?`;
+
+      const correct = isHistory
+        ? 'Phát huy tinh thần yêu nước, khối đại đoàn kết toàn dân và không ngừng đổi mới sáng tạo'
+        : 'Sử dụng hợp lí tài nguyên, tích cực trồng rừng và nâng cao ý thức phân loại rác thải tại nguồn';
+      const distractors = [
+        isHistory ? 'Chỉ trông chờ vào sự viện trợ từ bên ngoài mà không tự lực cánh sinh' : 'Khai thác tối đa mọi nguồn tài nguyên thiên nhiên trong thời gian ngắn nhất',
+        isHistory ? 'Xem nhẹ việc học tập và rèn luyện đạo đức của thế hệ trẻ' : 'Không cần quan tâm đến biến đổi khí hậu vì đó là việc của tương lai',
+        isHistory ? 'Áp dụng nguyên xi mô hình cũ mà không có sự chọn lọc phù hợp thực tế' : 'Đốt phá rừng làm nương rẫy để mở rộng diện tích sản xuất nhanh chóng'
+      ];
+      const allOpts = shuffle([correct, ...distractors]);
+
       result.push({
         id: `gen-q-${Date.now()}-${qIndex++}`,
         subject,
@@ -949,20 +1206,15 @@ function generateFallbackQuestions(subject: string, grade: number, lessonTitle: 
         lessonName: lessonTitle || `Bài ôn tập ${grade}`,
         type: 'multiple-choice',
         cognitiveLevel: 'van-dung',
-        questionText: isHistory
-          ? `[Vận dụng] Từ kinh nghiệm bảo vệ độc lập trong bài học "${lessonTitle}", học sinh ngày nay cần rèn luyện phẩm chất và hành động nào thiết thực nhất?`
-          : `[Vận dụng] Trước tình hình biến đổi khí hậu ảnh hưởng đến đặc điểm địa lí nói trên, hành động nào của học sinh thể hiện trách nhiệm bảo vệ môi trường?`,
-        options: [
-          'Chủ động học tập tốt, rèn luyện kỹ năng, đoàn kết và bảo vệ chủ quyền/môi trường sống quanh mình',
-          'Chỉ quan tâm đến điểm số cá nhân và không cần tham gia hoạt động cộng đồng',
-          'Cho rằng việc bảo vệ đất nước/môi trường là trách nhiệm riêng của chính quyền',
-          'Từ chối tiếp thu tri thức mới vì không liên quan trực tiếp đến cuộc sống hằng ngày'
-        ],
-        correctAnswers: [0],
-        explanation: 'Vận dụng bài học lịch sử hoặc địa lí vào nhận thức và hành động thực tế của công dân tương lai.',
+        questionText: qText,
+        options: allOpts,
+        correctAnswers: [allOpts.indexOf(correct)],
+        explanation: 'Vận dụng sáng tạo bài học vào việc giải quyết các vấn đề thực tiễn của bản thân và xã hội.',
         createdAt: new Date().toISOString()
       });
     } else {
+      const qText = `[Vận dụng tự luận] Từ nội dung bài học "${lessonTitle}", em hãy viết đoạn văn (khoảng 5-8 dòng) nêu suy nghĩ và hành động cụ thể của bản thân để đóng góp cho quê hương.`;
+
       result.push({
         id: `gen-q-${Date.now()}-${qIndex++}`,
         subject,
@@ -970,9 +1222,9 @@ function generateFallbackQuestions(subject: string, grade: number, lessonTitle: 
         lessonName: lessonTitle || `Bài ôn tập ${grade}`,
         type: 'essay',
         cognitiveLevel: 'van-dung',
-        questionText: `[Vận dụng tự luận] Em hãy viết một đoạn văn ngắn (từ 5 - 7 dòng) liên hệ kiến thức bài học "${lessonTitle}" với thực tiễn địa phương nơi em đang sinh sống.`,
-        essayGuide: 'Biểu điểm chấm:\n- Nêu đúng mối liên hệ thực tiễn (3.0đ)\n- Phân tích được ý nghĩa đối với bản thân và địa phương (4.0đ)\n- Trình bày mạch lạc, trong sáng, có dẫn chứng cụ thể (3.0đ).',
-        explanation: 'Đánh giá khả năng tư duy liên hệ thực tiễn của học sinh.',
+        questionText: qText,
+        essayGuide: 'Biểu điểm chấm:\n- Nêu được liên hệ thiết thực với nội dung bài học (3.0đ)\n- Đề xuất được 2-3 hành động cụ thể, khả thi của học sinh THCS (4.0đ)\n- Lời văn mạch lạc, chân thành, có cảm xúc (3.0đ).',
+        explanation: 'Đánh giá năng lực liên hệ thực tiễn và phẩm chất trách nhiệm của học sinh.',
         createdAt: new Date().toISOString()
       });
     }

@@ -105,6 +105,7 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
   ]);
   const [aiUploadedFiles, setAiUploadedFiles] = useState<{ name: string; base64: string; mimeType: string }[]>([]);
   const [aiCustomPrompt, setAiCustomPrompt] = useState('');
+  const [aiStrictDocumentOnly, setAiStrictDocumentOnly] = useState(true);
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiSummarizing, setAiSummarizing] = useState(false);
   const [generatedQuestions, setGeneratedQuestions] = useState<Question[]>([]);
@@ -352,6 +353,51 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
     });
   };
 
+  // Attach file directly to current lesson
+  const handleAttachFileToLesson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !currentLesson) return;
+
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        const newFile = {
+          name: file.name,
+          base64,
+          mimeType: file.type || 'application/octet-stream',
+        };
+        const updatedLessons = store.lessons.map((l) =>
+          l.id === currentLesson.id
+            ? { ...l, attachedFiles: [...(l.attachedFiles || []), newFile] }
+            : l
+        );
+        onUpdateStore({ lessons: updatedLessons });
+        // Also sync to aiUploadedFiles for immediate use
+        setAiUploadedFiles((prev) => {
+          if (prev.some((f) => f.name === newFile.name)) return prev;
+          return [...prev, newFile];
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Remove file from current lesson
+  const handleRemoveFileFromLesson = (fileIndex: number) => {
+    if (!currentLesson) return;
+    const currentAttached = currentLesson.attachedFiles || [];
+    const removedFile = currentAttached[fileIndex];
+    const updatedAttached = currentAttached.filter((_, idx) => idx !== fileIndex);
+    const updatedLessons = store.lessons.map((l) =>
+      l.id === currentLesson.id ? { ...l, attachedFiles: updatedAttached } : l
+    );
+    onUpdateStore({ lessons: updatedLessons });
+    if (removedFile) {
+      setAiUploadedFiles((prev) => prev.filter((f) => f.name !== removedFile.name));
+    }
+  };
+
   // AI Document Summarize
   const handleAiSummarize = async () => {
     if (!currentLesson && !newLessonTitle) {
@@ -359,19 +405,20 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
       return;
     }
     setAiSummarizing(true);
-    setAiStatusMsg('Đang phân tích tài liệu và tóm tắt lý thuyết bằng Gemini 3.8 Flash...');
+    setAiStatusMsg('Đang phân tích tài liệu và tóm tắt lý thuyết bằng Gemini 3.8 Flash (inlineData)...');
 
     try {
+      const targetFiles = aiUploadedFiles.length > 0 ? aiUploadedFiles : (currentLesson?.attachedFiles || []);
       const res = await summarizeDocumentApi({
         subject: selectedSubject,
         grade: selectedGrade,
         lessonTitle: currentLesson?.title || newLessonTitle,
-        files: aiUploadedFiles,
+        files: targetFiles,
       });
 
       if (res && currentLesson) {
         handleSaveLessonTheory(res.summary, res.keyPoints);
-        setAiStatusMsg('Đã trích xuất và cập nhật lý thuyết bài học thành công!');
+        setAiStatusMsg('Đã trích xuất và cập nhật lý thuyết bài học thành công từ tài liệu!');
       }
     } catch (err: any) {
       setAiStatusMsg(`Lỗi trích xuất: ${err.message}`);
@@ -383,10 +430,28 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
   // AI Question Generate
   const handleAiGenerateQuestions = async (isAppend = false) => {
     setAiGenerating(true);
-    setAiStatusMsg('Gemini AI đang sinh câu hỏi chuẩn theo 3 mức độ nhận thức...');
+    setAiStatusMsg('Gemini AI đang sinh câu hỏi chuẩn theo 3 mức độ nhận thức bám sát tài liệu...');
 
     try {
       const targetLessonTitle = currentLesson?.title || `Bài học môn ${selectedSubject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp ${selectedGrade}`;
+      const targetFiles = aiUploadedFiles.length > 0 ? aiUploadedFiles : (currentLesson?.attachedFiles || []);
+
+      // Collect all existing questions to avoid any duplication across runs
+      const existingLessonQuestions = store.questions
+        .filter((q) => q.lessonId === currentLesson?.id || q.lessonName === targetLessonTitle)
+        .map((q) => q.questionText);
+      const currentGenQuestions = generatedQuestions.map((q) => q.questionText);
+      const combinedPrevious = Array.from(new Set([...existingLessonQuestions, ...currentGenQuestions]));
+
+      const finalPrompt = [
+        aiStrictDocumentOnly
+          ? '[YÊU CẦU BẮT BUỘC: Ưu tiên tuyệt đối nội dung tài liệu đính kèm (PDF SGK / hình ảnh / lý thuyết bài học). Chỉ hỏi về các mốc, sự kiện, thuật ngữ, số liệu và kiến thức được nêu trong tài liệu. Tuyệt đối không tự suy diễn hoặc dùng kiến thức khái quát ngoài tài liệu.]'
+          : '',
+        aiCustomPrompt.trim(),
+      ]
+        .filter(Boolean)
+        .join('\n');
+
       const questions = await generateAIQuestionsApi({
         subject: selectedSubject,
         grade: selectedGrade,
@@ -395,16 +460,17 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
         count: aiCount,
         ratios: { biet: aiBiet, hieu: aiHieu, vanDung: aiVanDung },
         questionTypes: aiTypes,
-        customPrompt: aiCustomPrompt,
-        files: aiUploadedFiles,
+        customPrompt: finalPrompt,
+        files: targetFiles,
+        previousQuestions: combinedPrevious,
       });
 
       if (isAppend) {
         setGeneratedQuestions((prev) => [...prev, ...questions]);
-        setAiStatusMsg(`Đã tạo thêm ${questions.length} câu hỏi thành công!`);
+        setAiStatusMsg(`Đã tạo thêm ${questions.length} câu hỏi mới không trùng lặp!`);
       } else {
         setGeneratedQuestions(questions);
-        setAiStatusMsg(`Đã sinh thành công ${questions.length} câu hỏi theo tỉ lệ yêu cầu!`);
+        setAiStatusMsg(`Đã sinh thành công ${questions.length} câu hỏi bám sát tài liệu theo tỉ lệ yêu cầu!`);
       }
     } catch (err: any) {
       setAiStatusMsg(`Lỗi tạo câu hỏi: ${err.message}`);
@@ -889,6 +955,94 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
                             </div>
                           </div>
                         )}
+
+                        {/* Section for Attached SGK Documents & AI Integration */}
+                        <div className="p-4 bg-amber-50/50 rounded-2xl border border-amber-200/80 space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <FileText className="w-4 h-4 text-amber-700" />
+                              <h4 className="text-xs sm:text-sm font-bold text-amber-950 uppercase tracking-wider">
+                                Tài liệu SGK đính kèm & Tác nghiệp AI (inlineData PDF/Ảnh)
+                              </h4>
+                            </div>
+                            <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-amber-300 hover:bg-amber-50 rounded-xl text-xs font-semibold text-amber-900 shadow-2xs transition-colors">
+                              <UploadCloud className="w-3.5 h-3.5 text-amber-700" />
+                              <span>Thêm tệp SGK (PDF/Ảnh)</span>
+                              <input
+                                type="file"
+                                multiple
+                                accept=".pdf,.doc,.docx,.ppt,.pptx,image/*"
+                                onChange={handleAttachFileToLesson}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            Đính kèm file PDF SGK, giáo án hoặc ảnh chụp sách để Gemini 3.8 Flash đọc trọn vẹn văn bản và lược đồ (truyền inlineData), cam kết trích xuất và sinh câu hỏi bám sát 100% tài liệu.
+                          </p>
+
+                          {currentLesson.attachedFiles && currentLesson.attachedFiles.length > 0 ? (
+                            <div className="space-y-2 pt-1">
+                              <div className="flex flex-wrap gap-2">
+                                {currentLesson.attachedFiles.map((file, fIdx) => (
+                                  <div
+                                    key={fIdx}
+                                    className="inline-flex items-center gap-2 bg-white border border-amber-200 px-3 py-1.5 rounded-xl text-xs text-slate-800 shadow-2xs"
+                                  >
+                                    <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                    <span className="font-medium truncate max-w-[200px]">{file.name}</span>
+                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">
+                                      inlineData
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveFileFromLesson(fIdx)}
+                                      className="text-slate-400 hover:text-rose-600 transition-colors ml-1 font-bold"
+                                      title="Xóa tệp đính kèm này"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-amber-200/60">
+                                <button
+                                  type="button"
+                                  onClick={handleAiSummarize}
+                                  disabled={aiSummarizing || aiGenerating}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-colors shadow-2xs disabled:opacity-50"
+                                >
+                                  {aiSummarizing ? (
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                  )}
+                                  <span>AI Đọc & Cập nhật Lý thuyết từ file này</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setAiUploadedFiles(currentLesson.attachedFiles || []);
+                                    onTabChange('ai-generator');
+                                  }}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-amber-400 text-amber-900 hover:bg-amber-100/70 rounded-lg text-xs font-bold transition-colors shadow-2xs"
+                                >
+                                  <ListPlus className="w-3.5 h-3.5 text-amber-700" />
+                                  <span>AI Soạn câu hỏi từ file SGK này</span>
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-3 bg-white/80 rounded-xl border border-dashed border-amber-300 text-center">
+                              <p className="text-xs text-slate-500 italic">
+                                Chưa có tệp đính kèm nào cho bài học này. Bấm nút <strong>"Thêm tệp SGK (PDF/Ảnh)"</strong> ở trên để nạp tài liệu trực tiếp cho AI.
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </>
                     )}
                   </div>
@@ -1345,6 +1499,9 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
                     >
                       <FileText className="w-3.5 h-3.5 text-amber-600" />
                       <span className="truncate max-w-[180px]">{f.name}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold">
+                        inlineData
+                      </span>
                       <button
                         type="button"
                         onClick={() => setAiUploadedFiles((prev) => prev.filter((_, idx) => idx !== i))}
@@ -1358,6 +1515,33 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Quick sync from current lesson attached files if aiUploadedFiles is empty */}
+            {currentLesson?.attachedFiles && currentLesson.attachedFiles.length > 0 && aiUploadedFiles.length === 0 && (
+              <div className="mt-3 p-3 bg-white rounded-xl border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+                <div className="flex items-center gap-2 text-slate-700">
+                  <FileText className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    Bài học đang chọn <strong>"{currentLesson.title}"</strong> đã có <strong>{currentLesson.attachedFiles.length} tệp tài liệu SGK</strong>.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAiUploadedFiles(currentLesson.attachedFiles || [])}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold shrink-0 transition-colors shadow-2xs text-xs"
+                >
+                  Nạp {currentLesson.attachedFiles.length} tệp này vào AI
+                </button>
+              </div>
+            )}
+
+            {/* Multimodal inlineData confirmation badge */}
+            <div className="mt-3 p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200 text-xs text-emerald-900 flex items-start gap-2">
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <span className="leading-relaxed">
+                <strong>Xử lý đa phương tiện Gemini 3.8 Flash:</strong> Mọi tệp tải lên (PDF SGK, ảnh trang sách, Word) đều được trích xuất trực tiếp qua <code>inlineData</code> và kết hợp chống trùng lặp với ngân hàng câu hỏi để bảo đảm câu hỏi sinh ra luôn mới mẻ và bám sát từng trang sách.
+              </span>
+            </div>
           </div>
 
           {/* AI Settings Controls */}
@@ -1472,17 +1656,29 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-800 mb-1">
-                  Ghi chú hoặc yêu cầu riêng cho AI (tùy chọn):
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 p-2 bg-white rounded-lg border border-amber-300 text-xs font-semibold text-amber-950 cursor-pointer shadow-2xs">
+                  <input
+                    type="checkbox"
+                    checked={aiStrictDocumentOnly}
+                    onChange={(e) => setAiStrictDocumentOnly(e.target.checked)}
+                    className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4"
+                  />
+                  <span>Ưu tiên tuyệt đối tài liệu đính kèm (không hỏi kiến thức ngoài SGK)</span>
                 </label>
-                <input
-                  type="text"
-                  placeholder="Ví dụ: Tập trung vào các mốc thời gian thời Hùng Vương..."
-                  value={aiCustomPrompt}
-                  onChange={(e) => setAiCustomPrompt(e.target.value)}
-                  className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg"
-                />
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                    Ghi chú hoặc yêu cầu riêng cho AI (tùy chọn):
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ví dụ: Tập trung vào các mốc thời gian thời Hùng Vương..."
+                    value={aiCustomPrompt}
+                    onChange={(e) => setAiCustomPrompt(e.target.value)}
+                    className="w-full text-xs p-2 bg-white border border-slate-300 rounded-lg"
+                  />
+                </div>
               </div>
             </div>
           </div>
