@@ -42,7 +42,11 @@ import {
   Shuffle,
   Eye,
   Key,
-  Filter
+  Filter,
+  Pencil,
+  UserPlus,
+  X,
+  AlertCircle
 } from 'lucide-react';
 
 interface AdminPortalProps {
@@ -72,6 +76,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [pasteContent, setPasteContent] = useState('');
   const [importTargetClass, setImportTargetClass] = useState('6A1');
   const [importPreview, setImportPreview] = useState<Partial<Student>[]>([]);
+
+  // Single Student Create & Edit States
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [singleStudentFullName, setSingleStudentFullName] = useState('');
+  const [singleStudentCode, setSingleStudentCode] = useState('');
+  const [singleStudentClass, setSingleStudentClass] = useState('6A1');
+  const [singleStudentError, setSingleStudentError] = useState<string | null>(null);
+
+  const [showEditStudentModal, setShowEditStudentModal] = useState(false);
+  const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
+  const [editStudentFullName, setEditStudentFullName] = useState('');
+  const [editStudentCode, setEditStudentCode] = useState('');
+  const [editStudentClass, setEditStudentClass] = useState('6A1');
+  const [editStudentError, setEditStudentError] = useState<string | null>(null);
 
   // Exam Management States
   const [showAddExamModal, setShowAddExamModal] = useState(false);
@@ -170,9 +188,155 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     alert(`Đã nhập thành công ${newStudents.length} học sinh!`);
   };
 
-  const handleDeleteStudent = (id: string) => {
-    if (!confirm('Bạn có chắc muốn xóa học sinh này?')) return;
-    onUpdateStore({ students: store.students.filter((s) => s.id !== id) });
+  // Helper to auto-generate unique student code by class/grade (e.g., HS601, HS602, HS701...)
+  const generateStudentCodeForClass = (classCode: string): string => {
+    const targetClassObj = store.classrooms.find((c) => c.classCode === classCode);
+    const grade = targetClassObj?.grade || 6;
+    const prefix = `HS${grade}`;
+
+    let maxNum = 0;
+    store.students.forEach((s) => {
+      const code = s.studentCode.toUpperCase().trim();
+      if (code.startsWith(prefix)) {
+        const numPart = parseInt(code.slice(prefix.length), 10);
+        if (!isNaN(numPart) && numPart > maxNum) {
+          maxNum = numPart;
+        }
+      }
+    });
+
+    let nextNum = maxNum >= 1 ? maxNum + 1 : 1;
+    let candidate = `${prefix}${String(nextNum).padStart(2, '0')}`;
+
+    // Guarantee system-wide uniqueness
+    while (store.students.some((s) => s.studentCode.toUpperCase() === candidate.toUpperCase())) {
+      nextNum++;
+      candidate = `${prefix}${String(nextNum).padStart(2, '0')}`;
+    }
+    return candidate;
+  };
+
+  const handleAddSingleStudent = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSingleStudentError(null);
+
+    const fullName = singleStudentFullName.trim();
+    if (!fullName) {
+      setSingleStudentError('Vui lòng nhập họ và tên học sinh!');
+      return;
+    }
+
+    const targetClass = singleStudentClass.trim().toUpperCase();
+    if (!targetClass) {
+      setSingleStudentError('Vui lòng chọn lớp học!');
+      return;
+    }
+
+    let code = singleStudentCode.trim().toUpperCase();
+    if (!code) {
+      code = generateStudentCodeForClass(targetClass);
+    } else {
+      // Check duplicate code across the entire system
+      const isDuplicate = store.students.some(
+        (s) => s.studentCode.toUpperCase() === code
+      );
+      if (isDuplicate) {
+        setSingleStudentError(`Mã học sinh "${code}" đã tồn tại trong hệ thống! Vui lòng chọn mã khác.`);
+        return;
+      }
+    }
+
+    const targetClassObj = store.classrooms.find((c) => c.classCode === targetClass);
+    const grade = targetClassObj?.grade || 6;
+
+    const newStudent: Student = {
+      id: `std-${Date.now()}`,
+      studentCode: code,
+      fullName,
+      classCode: targetClass,
+      grade,
+    };
+
+    onUpdateStore({ students: [...store.students, newStudent] });
+    setShowAddStudentModal(false);
+    setSingleStudentFullName('');
+    setSingleStudentCode('');
+    setSingleStudentError(null);
+  };
+
+  const handleStartEditStudent = (student: Student) => {
+    setEditingStudentId(student.id);
+    setEditStudentFullName(student.fullName);
+    setEditStudentCode(student.studentCode);
+    setEditStudentClass(student.classCode);
+    setEditStudentError(null);
+    setShowEditStudentModal(true);
+  };
+
+  const handleSaveEditedStudent = (e: React.FormEvent) => {
+    e.preventDefault();
+    setEditStudentError(null);
+
+    if (!editingStudentId) return;
+
+    const fullName = editStudentFullName.trim();
+    if (!fullName) {
+      setEditStudentError('Vui lòng nhập họ và tên học sinh!');
+      return;
+    }
+
+    const code = editStudentCode.trim().toUpperCase();
+    if (!code) {
+      setEditStudentError('Mã học sinh không được để trống!');
+      return;
+    }
+
+    const targetClass = editStudentClass.trim().toUpperCase();
+    if (!targetClass) {
+      setEditStudentError('Vui lòng chọn lớp học!');
+      return;
+    }
+
+    // Check duplicate student code across OTHER students in system
+    const isDuplicate = store.students.some(
+      (s) => s.id !== editingStudentId && s.studentCode.toUpperCase() === code
+    );
+    if (isDuplicate) {
+      setEditStudentError(`Mã học sinh "${code}" đã tồn tại cho một học sinh khác trong hệ thống!`);
+      return;
+    }
+
+    const targetClassObj = store.classrooms.find((c) => c.classCode === targetClass);
+    const grade = targetClassObj?.grade || 6;
+
+    const updatedStudents = store.students.map((s) => {
+      if (s.id === editingStudentId) {
+        return {
+          ...s,
+          fullName,
+          studentCode: code,
+          classCode: targetClass,
+          grade,
+        };
+      }
+      return s;
+    });
+
+    onUpdateStore({ students: updatedStudents });
+    setShowEditStudentModal(false);
+    setEditingStudentId(null);
+    setEditStudentError(null);
+  };
+
+  const handleDeleteStudent = (student: Student) => {
+    if (
+      !confirm(
+        `Bạn có chắc chắn muốn xóa học sinh "${student.fullName}" (Mã: ${student.studentCode}, Lớp: ${student.classCode}) khỏi hệ thống?`
+      )
+    ) {
+      return;
+    }
+    onUpdateStore({ students: store.students.filter((s) => s.id !== student.id) });
   };
 
   // -------------------------------------------------------------
@@ -411,6 +575,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
               <div className="flex items-center gap-2 flex-wrap">
                 <button
+                  onClick={() => {
+                    const initialClass = selectedClassCode !== 'all' ? selectedClassCode : (store.classrooms[0]?.classCode || '6A1');
+                    setSingleStudentFullName('');
+                    setSingleStudentCode('');
+                    setSingleStudentClass(initialClass);
+                    setSingleStudentError(null);
+                    setShowAddStudentModal(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg shadow-xs transition-colors"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span>+ Thêm học sinh</span>
+                </button>
+                <button
                   onClick={() => setShowImportModal(true)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg shadow-xs transition-colors"
                 >
@@ -472,13 +650,22 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       </td>
                       <td className="p-3 text-slate-600">Lớp {std.grade}</td>
                       <td className="p-3 text-right">
-                        <button
-                          onClick={() => handleDeleteStudent(std.id)}
-                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors"
-                          title="Xóa học sinh"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleStartEditStudent(std)}
+                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            title="Sửa thông tin học sinh"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteStudent(std)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Xóa học sinh"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -869,6 +1056,191 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 Tạo lớp
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- MODAL: THÊM HỌC SINH MỚI ---------------- */}
+      {showAddStudentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-base font-bold text-slate-900">Thêm học sinh mới</h3>
+              </div>
+              <button
+                onClick={() => setShowAddStudentModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {singleStudentError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-700">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{singleStudentError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAddSingleStudent} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Họ và tên học sinh <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Nguyễn Văn An"
+                  value={singleStudentFullName}
+                  onChange={(e) => setSingleStudentFullName(e.target.value)}
+                  className="w-full p-2.5 text-xs sm:text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Mã học sinh
+                </label>
+                <input
+                  type="text"
+                  placeholder="Để trống cho hệ thống tự sinh mã (ví dụ HS601, HS702...)"
+                  value={singleStudentCode}
+                  onChange={(e) => setSingleStudentCode(e.target.value.toUpperCase())}
+                  className="w-full p-2.5 text-xs sm:text-sm border border-slate-300 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Mã duy nhất trong toàn hệ thống. Nếu để trống, hệ thống sẽ tự động gán mã theo đúng khối lớp.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Chọn Lớp học <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={singleStudentClass}
+                  onChange={(e) => setSingleStudentClass(e.target.value)}
+                  className="w-full p-2.5 text-xs sm:text-sm border border-slate-300 rounded-xl bg-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                >
+                  {store.classrooms.map((cls) => (
+                    <option key={cls.id} value={cls.classCode}>
+                      {cls.className || `Lớp ${cls.classCode}`} (Khối {cls.grade})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAddStudentModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl shadow-xs transition-colors"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Thêm học sinh</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- MODAL: CHỈNH SỬA THÔNG TIN HỌC SINH ---------------- */}
+      {showEditStudentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-base font-bold text-slate-900">Sửa thông tin học sinh</h3>
+              </div>
+              <button
+                onClick={() => setShowEditStudentModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {editStudentError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-700">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{editStudentError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEditedStudent} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Họ và tên học sinh <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editStudentFullName}
+                  onChange={(e) => setEditStudentFullName(e.target.value)}
+                  className="w-full p-2.5 text-xs sm:text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Mã học sinh <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editStudentCode}
+                  onChange={(e) => setEditStudentCode(e.target.value.toUpperCase())}
+                  className="w-full p-2.5 text-xs sm:text-sm border border-slate-300 rounded-xl font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Mã học sinh dùng để đăng nhập và không được trùng lặp toàn trường.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Đổi Lớp học (chuyển lớp / khối) <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={editStudentClass}
+                  onChange={(e) => setEditStudentClass(e.target.value)}
+                  className="w-full p-2.5 text-xs sm:text-sm border border-slate-300 rounded-xl bg-white font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                >
+                  {store.classrooms.map((cls) => (
+                    <option key={cls.id} value={cls.classCode}>
+                      {cls.className || `Lớp ${cls.classCode}`} (Khối {cls.grade})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowEditStudentModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl shadow-xs transition-colors"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>Lưu thông tin</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

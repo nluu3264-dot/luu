@@ -38,7 +38,10 @@ import {
   Video,
   ListPlus,
   ChevronRight,
-  BookMarked
+  BookMarked,
+  Pencil,
+  Check,
+  X
 } from 'lucide-react';
 
 interface AuthorPortalProps {
@@ -77,6 +80,11 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
 
   // Lesson sub-section (1: Ly thuyet, 2: Bai tap, 3: Tu luan)
   const [lessonSubSection, setLessonSubSection] = useState<'theory' | 'exercises' | 'essay'>('theory');
+
+  // Theory Inline Editing State
+  const [isEditingTheory, setIsEditingTheory] = useState(false);
+  const [editTheorySummary, setEditTheorySummary] = useState('');
+  const [editTheoryKeyPoints, setEditTheoryKeyPoints] = useState<string[]>([]);
 
   // New Lesson Modal State
   const [showAddLessonModal, setShowAddLessonModal] = useState(false);
@@ -180,6 +188,47 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
       return l;
     });
     onUpdateStore({ lessons: updated });
+  };
+
+  const handleStartEditTheory = () => {
+    if (!currentLesson) return;
+    setEditTheorySummary(currentLesson.theory.summary || '');
+    setEditTheoryKeyPoints(
+      currentLesson.theory.keyPoints && currentLesson.theory.keyPoints.length > 0
+        ? [...currentLesson.theory.keyPoints]
+        : ['']
+    );
+    setIsEditingTheory(true);
+  };
+
+  const handleCancelEditTheory = () => {
+    setIsEditingTheory(false);
+  };
+
+  const handleSaveEditedTheory = () => {
+    if (!currentLesson) return;
+    const cleanedPoints = editTheoryKeyPoints.map((p) => p.trim()).filter(Boolean);
+    handleSaveLessonTheory(editTheorySummary.trim(), cleanedPoints);
+    setIsEditingTheory(false);
+  };
+
+  const handleAddKeyPoint = () => {
+    setEditTheoryKeyPoints((prev) => [...prev, '']);
+  };
+
+  const handleUpdateKeyPoint = (index: number, val: string) => {
+    setEditTheoryKeyPoints((prev) => {
+      const copy = [...prev];
+      copy[index] = val;
+      return copy;
+    });
+  };
+
+  const handleRemoveKeyPoint = (index: number) => {
+    setEditTheoryKeyPoints((prev) => {
+      const filtered = prev.filter((_, idx) => idx !== index);
+      return filtered.length > 0 ? filtered : [''];
+    });
   };
 
   // AI File Upload Reader (supports multiple files at once: PDF, images, Word docs)
@@ -407,7 +456,10 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
               {filteredLessons.map((les) => (
                 <div
                   key={les.id}
-                  onClick={() => setActiveLessonId(les.id)}
+                  onClick={() => {
+                    setActiveLessonId(les.id);
+                    setIsEditingTheory(false);
+                  }}
                   className={`p-3 rounded-xl cursor-pointer text-xs sm:text-sm font-medium transition-all flex items-start justify-between gap-2 ${
                     currentLesson?.id === les.id
                       ? 'bg-amber-50/90 text-amber-950 border border-amber-300 shadow-xs'
@@ -442,6 +494,37 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
                     </h3>
                   </div>
                   <div className="flex items-center gap-2">
+                    {lessonSubSection === 'theory' && (
+                      !isEditingTheory ? (
+                        <button
+                          onClick={handleStartEditTheory}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 shadow-2xs transition-colors"
+                          title="Chỉnh sửa nội dung lý thuyết"
+                        >
+                          <Pencil className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Sửa</span>
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={handleSaveEditedTheory}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs transition-colors"
+                            title="Lưu nội dung lý thuyết"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Lưu</span>
+                          </button>
+                          <button
+                            onClick={handleCancelEditTheory}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+                            title="Hủy bỏ chỉnh sửa"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            <span>Hủy</span>
+                          </button>
+                        </div>
+                      )
+                    )}
                     <button
                       onClick={() => onTabChange('ai-generator')}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 shadow-xs transition-colors"
@@ -462,7 +545,9 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
                 {/* 3 Sub-sections Tabs: 3.1 Lý thuyết, 3.2 Bài tập, 3.3 Tự luận */}
                 <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
                   <button
-                    onClick={() => setLessonSubSection('theory')}
+                    onClick={() => {
+                      setLessonSubSection('theory');
+                    }}
                     className={`pb-2 px-3 text-xs sm:text-sm font-semibold transition-all relative ${
                       lessonSubSection === 'theory'
                         ? 'text-amber-800 border-b-2 border-amber-600'
@@ -472,7 +557,10 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
                     3.1. Ôn tập Lý thuyết
                   </button>
                   <button
-                    onClick={() => setLessonSubSection('exercises')}
+                    onClick={() => {
+                      setIsEditingTheory(false);
+                      setLessonSubSection('exercises');
+                    }}
                     className={`pb-2 px-3 text-xs sm:text-sm font-semibold transition-all relative ${
                       lessonSubSection === 'exercises'
                         ? 'text-amber-800 border-b-2 border-amber-600'
@@ -482,7 +570,10 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
                     3.2. Ôn tập Bài tập ({currentLessonQuestions.filter(q => q.type !== 'essay').length})
                   </button>
                   <button
-                    onClick={() => setLessonSubSection('essay')}
+                    onClick={() => {
+                      setIsEditingTheory(false);
+                      setLessonSubSection('essay');
+                    }}
                     className={`pb-2 px-3 text-xs sm:text-sm font-semibold transition-all relative ${
                       lessonSubSection === 'essay'
                         ? 'text-amber-800 border-b-2 border-amber-600'
@@ -496,49 +587,162 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
                 {/* 3.1 THEORY VIEW */}
                 {lessonSubSection === 'theory' && (
                   <div className="space-y-4">
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                      <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                        <FileText className="w-4 h-4 text-amber-600" />
-                        Tóm tắt kiến thức trọng tâm
-                      </h4>
-                      <p className="text-sm text-slate-800 leading-relaxed">
-                        {currentLesson.theory.summary}
-                      </p>
-                    </div>
-
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
-                        Kiến thức cốt lõi cần nhớ
-                      </h4>
-                      <div className="space-y-2">
-                        {currentLesson.theory.keyPoints.map((pt, idx) => (
-                          <div
-                            key={idx}
-                            className="p-3 rounded-lg bg-amber-50/50 border border-amber-100 text-xs sm:text-sm text-amber-950 flex items-start gap-2.5"
-                          >
-                            <span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
-                              {idx + 1}
-                            </span>
-                            <span>{pt}</span>
+                    {isEditingTheory ? (
+                      /* EDITING MODE */
+                      <div className="p-4 bg-amber-50/40 rounded-2xl border border-amber-200 space-y-5">
+                        <div className="flex items-center justify-between pb-3 border-b border-amber-200">
+                          <div className="flex items-center gap-2">
+                            <Pencil className="w-4 h-4 text-amber-700" />
+                            <h4 className="text-xs sm:text-sm font-bold text-amber-900 uppercase tracking-wider">
+                              Chỉnh sửa nội dung lý thuyết bài học
+                            </h4>
                           </div>
-                        ))}
-                      </div>
-                    </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={handleSaveEditedTheory}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs transition-colors"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Lưu thay đổi</span>
+                            </button>
+                            <button
+                              onClick={handleCancelEditTheory}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              <span>Hủy</span>
+                            </button>
+                          </div>
+                        </div>
 
-                    {currentLesson.theory.timelineOrFacts && currentLesson.theory.timelineOrFacts.length > 0 && (
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
-                          {selectedSubject === 'lich-su' ? 'Mốc sự kiện lịch sử nổi bật' : 'Quy luật & Số liệu địa lí tiêu biểu'}
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                          {currentLesson.theory.timelineOrFacts.map((item, idx) => (
-                            <div key={idx} className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs">
-                              <span className="font-bold text-xs text-amber-800 block mb-0.5">{item.title}</span>
-                              <span className="text-xs text-slate-600">{item.content}</span>
-                            </div>
-                          ))}
+                        {/* Edit Summary */}
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                            <FileText className="w-4 h-4 text-amber-600" />
+                            Tóm tắt kiến thức trọng tâm
+                          </label>
+                          <textarea
+                            rows={4}
+                            value={editTheorySummary}
+                            onChange={(e) => setEditTheorySummary(e.target.value)}
+                            placeholder="Nhập tóm tắt khái quát nội dung trọng tâm bài học..."
+                            className="w-full text-xs sm:text-sm p-3 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-slate-800 leading-relaxed"
+                          />
+                        </div>
+
+                        {/* Edit Key Points List */}
+                        <div className="space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                              Kiến thức cốt lõi cần nhớ (từng dòng)
+                            </label>
+                            <button
+                              type="button"
+                              onClick={handleAddKeyPoint}
+                              className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 bg-amber-100 text-amber-900 hover:bg-amber-200 rounded-lg transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Thêm ý kiến thức</span>
+                            </button>
+                          </div>
+
+                          <div className="space-y-2">
+                            {editTheoryKeyPoints.map((pt, idx) => (
+                              <div key={idx} className="flex items-start gap-2 bg-white p-2.5 rounded-xl border border-slate-200">
+                                <span className="w-6 h-6 rounded-full bg-amber-100 text-amber-800 text-xs font-bold flex items-center justify-center shrink-0 mt-1">
+                                  {idx + 1}
+                                </span>
+                                <textarea
+                                  rows={2}
+                                  value={pt}
+                                  onChange={(e) => handleUpdateKeyPoint(idx, e.target.value)}
+                                  placeholder={`Ý kiến thức cốt lõi ${idx + 1}...`}
+                                  className="flex-1 text-xs sm:text-sm p-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 text-slate-800"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveKeyPoint(idx)}
+                                  className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
+                                  title="Xóa ý này"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Bottom action buttons */}
+                        <div className="flex items-center justify-end gap-2 pt-3 border-t border-amber-200/60">
+                          <button
+                            type="button"
+                            onClick={handleCancelEditTheory}
+                            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                          >
+                            Hủy
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSaveEditedTheory}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl shadow-xs transition-colors"
+                          >
+                            <Check className="w-4 h-4" />
+                            <span>Lưu thay đổi lý thuyết</span>
+                          </button>
                         </div>
                       </div>
+                    ) : (
+                      /* READ-ONLY VIEW */
+                      <>
+                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <FileText className="w-4 h-4 text-amber-600" />
+                            Tóm tắt kiến thức trọng tâm
+                          </h4>
+                          <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-line">
+                            {currentLesson.theory.summary || 'Chưa có tóm tắt lý thuyết. Hãy bấm "Sửa" hoặc "AI Tự động soạn bài".'}
+                          </p>
+                        </div>
+
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
+                            Kiến thức cốt lõi cần nhớ
+                          </h4>
+                          <div className="space-y-2">
+                            {currentLesson.theory.keyPoints && currentLesson.theory.keyPoints.length > 0 ? (
+                              currentLesson.theory.keyPoints.map((pt, idx) => (
+                                <div
+                                  key={idx}
+                                  className="p-3 rounded-lg bg-amber-50/50 border border-amber-100 text-xs sm:text-sm text-amber-950 flex items-start gap-2.5"
+                                >
+                                  <span className="w-5 h-5 rounded-full bg-amber-200 text-amber-800 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
+                                    {idx + 1}
+                                  </span>
+                                  <span>{pt}</span>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-xs text-slate-400 italic p-3">Chưa có danh sách kiến thức cốt lõi.</p>
+                            )}
+                          </div>
+                        </div>
+
+                        {currentLesson.theory.timelineOrFacts && currentLesson.theory.timelineOrFacts.length > 0 && (
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
+                              {selectedSubject === 'lich-su' ? 'Mốc sự kiện lịch sử nổi bật' : 'Quy luật & Số liệu địa lí tiêu biểu'}
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              {currentLesson.theory.timelineOrFacts.map((item, idx) => (
+                                <div key={idx} className="p-3 bg-white border border-slate-200 rounded-xl shadow-2xs">
+                                  <span className="font-bold text-xs text-amber-800 block mb-0.5">{item.title}</span>
+                                  <span className="text-xs text-slate-600">{item.content}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
