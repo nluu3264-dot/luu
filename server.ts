@@ -286,6 +286,36 @@ app.post('/api/submissions', (req, res) => {
     }
 
     const exam = currentStore.exams.find(e => e.id === examId);
+    if (exam) {
+      if (exam.status === 'closed') {
+        return res.status(403).json({ success: false, error: 'Bài kiểm tra này hiện đã đóng, không thể nộp bài!' });
+      }
+      if (exam.status === 'draft') {
+        return res.status(403).json({ success: false, error: 'Bài kiểm tra đang ở trạng thái Bản nháp, chưa được mở!' });
+      }
+      if (exam.assignedClassCodes && exam.assignedClassCodes.length > 0 && !exam.assignedClassCodes.includes(classCode)) {
+        return res.status(403).json({ success: false, error: `Bài kiểm tra này không áp dụng cho lớp ${classCode} của em!` });
+      }
+      const now = new Date();
+      if (exam.openTime && new Date(exam.openTime).toString() !== 'Invalid Date' && now < new Date(exam.openTime)) {
+        return res.status(403).json({ success: false, error: `Chưa đến thời gian mở làm bài kiểm tra! (Mở lúc: ${new Date(exam.openTime).toLocaleString('vi-VN')})` });
+      }
+      if (exam.closeTime && new Date(exam.closeTime).toString() !== 'Invalid Date' && now > new Date(exam.closeTime)) {
+        return res.status(403).json({ success: false, error: `Đã hết hạn làm bài kiểm tra! (Hạn chót: ${new Date(exam.closeTime).toLocaleString('vi-VN')})` });
+      }
+      if (exam.maxAttempts && exam.maxAttempts > 0) {
+        const priorCount = currentStore.submissions.filter(
+          s => s.examId === examId && s.studentCode === studentCode && s.classCode === classCode
+        ).length;
+        if (priorCount >= exam.maxAttempts) {
+          return res.status(403).json({
+            success: false,
+            error: `Em đã hoàn thành số lần làm bài tối đa (${exam.maxAttempts} lần) cho bài kiểm tra này!`
+          });
+        }
+      }
+    }
+
     const examTitle = exam ? exam.title : 'Bài kiểm tra thường xuyên';
     const subject = exam ? exam.subject : 'lich-su';
     const grade = exam ? exam.grade : 6;

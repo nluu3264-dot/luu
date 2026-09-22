@@ -14,6 +14,7 @@ import {
   StudentAnswer,
   AppStoreData,
   CognitiveLevel,
+  Question,
 } from '../../types';
 import { submitExamApi } from '../../services/api';
 import { QuestionItem } from '../questions/QuestionItem';
@@ -66,6 +67,8 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
 
   // Active Exam Taking States
   const [activeExam, setActiveExam] = useState<Exam | null>(null);
+  const [lastSubmittedExam, setLastSubmittedExam] = useState<Exam | null>(null);
+  const [activeExamQuestions, setActiveExamQuestions] = useState<Question[]>([]);
   const [examTimeRemaining, setExamTimeRemaining] = useState<number>(0);
   const [studentAnswers, setStudentAnswers] = useState<{ [qId: string]: StudentAnswer }>({});
   const [submitting, setSubmitting] = useState(false);
@@ -113,7 +116,34 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
   }, [activeExam]);
 
   const handleStartExam = (exam: Exam) => {
+    // Check timing and attempt constraints
+    const now = new Date();
+    if (exam.openTime && new Date(exam.openTime) > now) {
+      alert(`Bài kiểm tra này chưa mở. Thời gian mở: ${new Date(exam.openTime).toLocaleString('vi-VN')}`);
+      return;
+    }
+    if (exam.closeTime && new Date(exam.closeTime) < now) {
+      alert(`Bài kiểm tra này đã kết thúc thời gian làm bài vào: ${new Date(exam.closeTime).toLocaleString('vi-VN')}`);
+      return;
+    }
+    const attempts = mySubmissions.filter((s) => s.examId === exam.id).length;
+    const maxAttempts = exam.maxAttempts || 1;
+    if (maxAttempts > 0 && attempts >= maxAttempts) {
+      alert(`Em đã hoàn thành tối đa số lần cho phép (${attempts}/${maxAttempts} lần).`);
+      return;
+    }
+
+    let qs = exam.questionIds
+      .map((qId) => store.questions.find((q) => q.id === qId))
+      .filter(Boolean) as Question[];
+
+    if (exam.shuffleQuestions) {
+      qs = [...qs].sort(() => Math.random() - 0.5);
+    }
+
+    setActiveExamQuestions(qs);
     setActiveExam(exam);
+    setLastSubmittedExam(exam);
     setExamTimeRemaining(exam.durationMinutes * 60);
     setStudentAnswers({});
     setTabSwitchCount(0);
@@ -173,13 +203,6 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
     const s = secs % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
-
-  // Questions for currently active exam
-  const activeExamQuestions = activeExam
-    ? activeExam.questionIds
-        .map((qId) => store.questions.find((q) => q.id === qId))
-        .filter(Boolean)
-    : [];
 
   // Practice questions for current lesson
   const currentLessonQuestions = store.questions.filter(
@@ -361,61 +384,77 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
           </div>
 
           {/* Big Score Card */}
-          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 p-6 text-center">
-            <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">
-              Điểm số đạt được
-            </span>
-            <span className="text-5xl font-black text-emerald-900 mt-1 block">
-              {submittedResult.score} <span className="text-xl font-bold text-emerald-700">/ {submittedResult.maxScore}</span>
-            </span>
-            <span className="text-xs text-emerald-700 font-medium mt-1 block">
-              Đúng {submittedResult.correctCount} / {submittedResult.totalQuestions} câu hỏi
-            </span>
-          </div>
+          {lastSubmittedExam?.showScoreImmediately === false ? (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 text-center space-y-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block">
+                Trạng thái bài làm
+              </span>
+              <span className="text-2xl font-black text-slate-800 mt-1 block">
+                Đã nộp bài thành công
+              </span>
+              <p className="text-xs text-slate-600 max-w-md mx-auto">
+                Giáo viên đã cài đặt ẩn điểm số tức thì. Điểm chính thức và nhận xét chi tiết sẽ được công bố sau khi hoàn tất đợt kiểm tra.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border border-emerald-200 p-6 text-center">
+              <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">
+                Điểm số đạt được
+              </span>
+              <span className="text-5xl font-black text-emerald-900 mt-1 block">
+                {submittedResult.score} <span className="text-xl font-bold text-emerald-700">/ {submittedResult.maxScore}</span>
+              </span>
+              <span className="text-xs text-emerald-700 font-medium mt-1 block">
+                Đúng {submittedResult.correctCount} / {submittedResult.totalQuestions} câu hỏi
+              </span>
+            </div>
+          )}
 
           {/* Cognitive Level Breakdown (Biết - Hiểu - Vận dụng) */}
-          <div className="space-y-2">
-            <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Đánh giá theo 3 mức độ nhận thức:
-            </h4>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-sky-50 rounded-xl p-3 border border-sky-100 text-center">
-                <span className="text-xs font-bold text-sky-800 block">Biết (Nhận biết)</span>
-                <span className="text-lg font-black text-sky-900">
-                  {submittedResult.breakdown.biet.correct} / {submittedResult.breakdown.biet.total}
-                </span>
-                <span className="text-[10px] text-sky-600 block mt-0.5">
-                  {submittedResult.breakdown.biet.total > 0
-                    ? Math.round((submittedResult.breakdown.biet.correct / submittedResult.breakdown.biet.total) * 100)
-                    : 0}% đúng
-                </span>
-              </div>
+          {lastSubmittedExam?.showScoreImmediately !== false && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Đánh giá theo 3 mức độ nhận thức:
+              </h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-sky-50 rounded-xl p-3 border border-sky-100 text-center">
+                  <span className="text-xs font-bold text-sky-800 block">Biết (Nhận biết)</span>
+                  <span className="text-lg font-black text-sky-900">
+                    {submittedResult.breakdown.biet.correct} / {submittedResult.breakdown.biet.total}
+                  </span>
+                  <span className="text-[10px] text-sky-600 block mt-0.5">
+                    {submittedResult.breakdown.biet.total > 0
+                      ? Math.round((submittedResult.breakdown.biet.correct / submittedResult.breakdown.biet.total) * 100)
+                      : 0}% đúng
+                  </span>
+                </div>
 
-              <div className="bg-amber-50 rounded-xl p-3 border border-amber-100 text-center">
-                <span className="text-xs font-bold text-amber-800 block">Hiểu (Thông hiểu)</span>
-                <span className="text-lg font-black text-amber-900">
-                  {submittedResult.breakdown.hieu.correct} / {submittedResult.breakdown.hieu.total}
-                </span>
-                <span className="text-[10px] text-amber-600 block mt-0.5">
-                  {submittedResult.breakdown.hieu.total > 0
-                    ? Math.round((submittedResult.breakdown.hieu.correct / submittedResult.breakdown.hieu.total) * 100)
-                    : 0}% đúng
-                </span>
-              </div>
+                <div className="bg-amber-50 rounded-xl p-3 border border-amber-100 text-center">
+                  <span className="text-xs font-bold text-amber-800 block">Hiểu (Thông hiểu)</span>
+                  <span className="text-lg font-black text-amber-900">
+                    {submittedResult.breakdown.hieu.correct} / {submittedResult.breakdown.hieu.total}
+                  </span>
+                  <span className="text-[10px] text-amber-600 block mt-0.5">
+                    {submittedResult.breakdown.hieu.total > 0
+                      ? Math.round((submittedResult.breakdown.hieu.correct / submittedResult.breakdown.hieu.total) * 100)
+                      : 0}% đúng
+                  </span>
+                </div>
 
-              <div className="bg-purple-50 rounded-xl p-3 border border-purple-100 text-center">
-                <span className="text-xs font-bold text-purple-800 block">Vận dụng</span>
-                <span className="text-lg font-black text-purple-900">
-                  {submittedResult.breakdown.vanDung.correct} / {submittedResult.breakdown.vanDung.total}
-                </span>
-                <span className="text-[10px] text-purple-600 block mt-0.5">
-                  {submittedResult.breakdown.vanDung.total > 0
-                    ? Math.round((submittedResult.breakdown.vanDung.correct / submittedResult.breakdown.vanDung.total) * 100)
-                    : 0}% đúng
-                </span>
+                <div className="bg-purple-50 rounded-xl p-3 border border-purple-100 text-center">
+                  <span className="text-xs font-bold text-purple-800 block">Vận dụng</span>
+                  <span className="text-lg font-black text-purple-900">
+                    {submittedResult.breakdown.vanDung.correct} / {submittedResult.breakdown.vanDung.total}
+                  </span>
+                  <span className="text-[10px] text-purple-600 block mt-0.5">
+                    {submittedResult.breakdown.vanDung.total > 0
+                      ? Math.round((submittedResult.breakdown.vanDung.correct / submittedResult.breakdown.vanDung.total) * 100)
+                      : 0}% đúng
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="flex justify-center pt-2">
             <button
@@ -644,44 +683,120 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {assignedExams.map((exam) => (
-              <div
-                key={exam.id}
-                className="p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-300 transition-all shadow-2xs space-y-3"
-              >
-                <div>
-                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                    exam.subject === 'lich-su' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
-                  }`}>
-                    {exam.subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} • Lớp {exam.grade}
-                  </span>
-                  <h4 className="text-base font-bold text-slate-900 mt-1">{exam.title}</h4>
-                </div>
+            {assignedExams.map((exam) => {
+              const now = new Date();
+              const attempts = mySubmissions.filter((s) => s.examId === exam.id);
+              const attemptCount = attempts.length;
+              const maxAttempts = exam.maxAttempts || 1;
+              const isExhausted = maxAttempts > 0 && attemptCount >= maxAttempts;
+              const isBeforeOpen = exam.openTime ? new Date(exam.openTime) > now : false;
+              const isAfterClose = exam.closeTime ? new Date(exam.closeTime) < now : false;
+              const canStart = !isBeforeOpen && !isAfterClose && !isExhausted;
+              const latestSubmission = attempts[0]; // newest is first if unshifted
 
-                <div className="flex items-center gap-4 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl">
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="w-4 h-4 text-slate-400" />
-                    <span>{exam.durationMinutes} phút</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-slate-400" />
-                    <span>{exam.questionCount} câu hỏi</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Award className="w-4 h-4 text-slate-400" />
-                    <span>Thang {exam.scoreScale} điểm</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handleStartExam(exam)}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5"
+              return (
+                <div
+                  key={exam.id}
+                  className="p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-300 transition-all shadow-2xs space-y-3 flex flex-col justify-between"
                 >
-                  <Play className="w-4 h-4" />
-                  <span>Bắt đầu làm bài</span>
-                </button>
-              </div>
-            ))}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                        exam.subject === 'lich-su' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
+                      }`}>
+                        {exam.subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} • Lớp {exam.grade}
+                      </span>
+                      {attemptCount > 0 && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-sky-100 text-sky-800">
+                          Đã làm {attemptCount}/{maxAttempts} lần
+                        </span>
+                      )}
+                    </div>
+
+                    <h4 className="text-base font-bold text-slate-900">{exam.title}</h4>
+
+                    {(() => {
+                      const labels = (exam.lessonNames && exam.lessonNames.length > 0)
+                        ? exam.lessonNames
+                        : exam.lessonIds
+                            .map((id) => store.lessons.find((l) => l.id === id)?.title)
+                            .filter(Boolean) as string[];
+
+                      if (!labels || labels.length === 0) return null;
+
+                      return (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] text-slate-500 font-medium">Bài học:</span>
+                          {labels.map((name: string, i: number) => (
+                            <span key={i} className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-medium truncate max-w-[200px]">
+                              {name}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <div className="flex items-center gap-4 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 text-slate-400" />
+                        <span>{exam.durationMinutes} phút</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 text-slate-400" />
+                        <span>{exam.questionCount} câu</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Award className="w-4 h-4 text-slate-400" />
+                        <span>Thang {exam.scoreScale}đ</span>
+                      </div>
+                    </div>
+
+                    {(exam.openTime || exam.closeTime) && (
+                      <div className="text-[11px] text-slate-500 bg-slate-50/70 p-2 rounded-lg border border-slate-100 space-y-0.5">
+                        {exam.openTime && (
+                          <div>Mở đề: <span className="font-medium text-slate-700">{new Date(exam.openTime).toLocaleString('vi-VN')}</span></div>
+                        )}
+                        {exam.closeTime && (
+                          <div>Hạn chót: <span className="font-medium text-slate-700">{new Date(exam.closeTime).toLocaleString('vi-VN')}</span></div>
+                        )}
+                      </div>
+                    )}
+
+                    {latestSubmission && (
+                      <div className="text-[11px] text-emerald-800 bg-emerald-50/70 p-2 rounded-lg border border-emerald-100 flex items-center justify-between">
+                        <span>Điểm gần nhất:</span>
+                        <span className="font-black text-sm">{latestSubmission.score} / {latestSubmission.maxScore}đ</span>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => handleStartExam(exam)}
+                      disabled={!canStart}
+                      className={`w-full py-2.5 font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 ${
+                        !canStart
+                          ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      }`}
+                    >
+                      <Play className="w-4 h-4" />
+                      <span>
+                        {isBeforeOpen
+                          ? `Chưa mở (Từ ${new Date(exam.openTime!).toLocaleDateString('vi-VN')})`
+                          : isAfterClose
+                          ? 'Đã hết hạn làm bài'
+                          : isExhausted
+                          ? 'Đã hết lượt làm bài'
+                          : attemptCount > 0
+                          ? `Làm lại bài (Lần ${attemptCount + 1}/${maxAttempts})`
+                          : 'Bắt đầu làm bài'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
 
             {assignedExams.length === 0 && (
               <div className="col-span-2 text-center py-12 text-slate-400">

@@ -49,7 +49,17 @@ import {
   Pencil,
   UserPlus,
   X,
-  AlertCircle
+  AlertCircle,
+  CheckCircle2,
+  Sparkles,
+  BookOpen,
+  Compass,
+  Lock,
+  Unlock,
+  AlertTriangle,
+  RotateCcw,
+  Power,
+  Save,
 } from 'lucide-react';
 
 interface AdminPortalProps {
@@ -94,18 +104,43 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [editStudentClass, setEditStudentClass] = useState('6A1');
   const [editStudentError, setEditStudentError] = useState<string | null>(null);
 
-  // Exam Management States
-  const [showAddExamModal, setShowAddExamModal] = useState(false);
+  // Exam Management States (Kiểm tra thường xuyên)
+  const [showExamModal, setShowExamModal] = useState(false);
+  const [editingExamId, setEditingExamId] = useState<string | null>(null);
   const [examTitle, setExamTitle] = useState('');
   const [examSubject, setExamSubject] = useState<SubjectType>('lich-su');
   const [examGrade, setExamGrade] = useState<GradeLevel>(6);
+  const [examLessonIds, setExamLessonIds] = useState<string[]>([]);
   const [examDuration, setExamDuration] = useState<number>(15);
   const [examScale, setExamScale] = useState<ScoreScale>(10);
-  const [examAnswerReveal, setExamAnswerReveal] = useState<AnswerRevealMode>('immediate');
-  const [examScoreReveal, setExamScoreReveal] = useState<ScoreRevealMode>('immediate');
+  const [examOpenTime, setExamOpenTime] = useState<string>('');
+  const [examCloseTime, setExamCloseTime] = useState<string>('');
+  const [examMaxAttemptsMode, setExamMaxAttemptsMode] = useState<'unlimited' | 'limited'>('unlimited');
+  const [examMaxAttempts, setExamMaxAttempts] = useState<number>(1);
+  const [examShowAnswersImmediately, setExamShowAnswersImmediately] = useState<boolean>(true);
+  const [examShowScoreImmediately, setExamShowScoreImmediately] = useState<boolean>(true);
   const [examShuffle, setExamShuffle] = useState(true);
+  const [examStatus, setExamStatus] = useState<'published' | 'draft' | 'closed'>('published');
   const [examAssignedClasses, setExamAssignedClasses] = useState<string[]>(['6A1']);
+  const [examQuestionSelectionMode, setExamQuestionSelectionMode] = useState<'manual' | 'ai' | 'random'>('manual');
   const [examSelectedQIds, setExamSelectedQIds] = useState<string[]>([]);
+
+  // Filter & Search inside exam question picker
+  const [qPickerSearch, setQPickerSearch] = useState('');
+  const [qPickerLevelFilter, setQPickerLevelFilter] = useState<'all' | 'biet' | 'hieu' | 'van-dung'>('all');
+  const [qPickerLessonFilter, setQPickerLessonFilter] = useState<string>('all');
+
+  // Random picker settings
+  const [randomTargetCount, setRandomTargetCount] = useState<number>(10);
+  const [randomRatioBiet, setRandomRatioBiet] = useState<number>(40);
+  const [randomRatioHieu, setRandomRatioHieu] = useState<number>(40);
+  const [randomRatioVanDung, setRandomRatioVanDung] = useState<number>(20);
+
+  // Exam list filters in Admin tab
+  const [examFilterSubject, setExamFilterSubject] = useState<string>('all');
+  const [examFilterGrade, setExamFilterGrade] = useState<string>('all');
+  const [examFilterStatus, setExamFilterStatus] = useState<string>('all');
+  const [examSearchText, setExamSearchText] = useState('');
 
   // Result Stats & Filters
   const [statExamFilter, setStatExamFilter] = useState<string>('all');
@@ -375,42 +410,225 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   };
 
   // -------------------------------------------------------------
-  // EXAM HANDLERS
+  // EXAM HANDLERS (Kiểm tra thường xuyên)
   // -------------------------------------------------------------
 
-  const handleCreateExam = () => {
-    if (!examTitle.trim() || examSelectedQIds.length === 0) {
-      alert('Vui lòng nhập tên đề và chọn ít nhất 1 câu hỏi!');
+  const openCreateExamModal = () => {
+    setEditingExamId(null);
+    setExamTitle('');
+    setExamSubject('lich-su');
+    setExamGrade(6);
+    setExamLessonIds([]);
+    setExamDuration(15);
+    setExamScale(10);
+    setExamOpenTime('');
+    setExamCloseTime('');
+    setExamMaxAttemptsMode('unlimited');
+    setExamMaxAttempts(1);
+    setExamShowAnswersImmediately(true);
+    setExamShowScoreImmediately(true);
+    setExamShuffle(true);
+    setExamStatus('published');
+    const gradeClasses = store.classrooms.filter((c) => c.grade === 6).map((c) => c.classCode);
+    setExamAssignedClasses(gradeClasses.length > 0 ? gradeClasses : ['6A1']);
+    setExamQuestionSelectionMode('manual');
+    setExamSelectedQIds([]);
+    setQPickerSearch('');
+    setQPickerLevelFilter('all');
+    setQPickerLessonFilter('all');
+    setShowExamModal(true);
+  };
+
+  const openEditExamModal = (exam: Exam) => {
+    setEditingExamId(exam.id);
+    setExamTitle(exam.title);
+    setExamSubject(exam.subject);
+    setExamGrade(exam.grade);
+    setExamLessonIds(exam.lessonIds || []);
+    setExamDuration(exam.durationMinutes || 15);
+    setExamScale(exam.scoreScale || 10);
+    setExamOpenTime(exam.openTime || '');
+    setExamCloseTime(exam.closeTime || '');
+    setExamMaxAttemptsMode(exam.maxAttempts && exam.maxAttempts > 0 ? 'limited' : 'unlimited');
+    setExamMaxAttempts(exam.maxAttempts && exam.maxAttempts > 0 ? exam.maxAttempts : 1);
+    setExamShowAnswersImmediately(exam.showAnswersImmediately !== undefined ? exam.showAnswersImmediately : exam.answerRevealMode === 'immediate');
+    setExamShowScoreImmediately(exam.showScoreImmediately !== undefined ? exam.showScoreImmediately : exam.scoreRevealMode === 'immediate');
+    setExamShuffle(exam.shuffleQuestions ?? true);
+    setExamStatus(exam.status || 'published');
+    setExamAssignedClasses(exam.assignedClassCodes || []);
+    setExamQuestionSelectionMode(exam.questionSelectionMode || 'manual');
+    setExamSelectedQIds(exam.questionIds || []);
+    setQPickerSearch('');
+    setQPickerLevelFilter('all');
+    setQPickerLessonFilter('all');
+    setShowExamModal(true);
+  };
+
+  const handleSaveExam = () => {
+    if (!examTitle.trim()) {
+      alert('Vui lòng nhập tên bài kiểm tra!');
+      return;
+    }
+    if (examAssignedClasses.length === 0) {
+      alert('Vui lòng chọn ít nhất 1 lớp được làm bài!');
+      return;
+    }
+    if (examDuration <= 0) {
+      alert('Thời gian làm bài phải lớn hơn 0 phút!');
+      return;
+    }
+    if (examSelectedQIds.length === 0) {
+      alert('Vui lòng chọn ít nhất 1 câu hỏi cho bài kiểm tra!');
+      return;
+    }
+    if (examOpenTime && examCloseTime && new Date(examOpenTime) >= new Date(examCloseTime)) {
+      alert('Thời gian mở bài kiểm tra phải trước thời gian hết hạn!');
       return;
     }
 
-    const newExam: Exam = {
-      id: `exam-${Date.now()}`,
-      title: examTitle.trim(),
-      subject: examSubject,
-      grade: examGrade,
-      lessonIds: [],
-      durationMinutes: examDuration,
-      scoreScale: examScale,
-      questionCount: examSelectedQIds.length,
-      questionIds: examSelectedQIds,
-      assignedClassCodes: examAssignedClasses,
-      answerRevealMode: examAnswerReveal,
-      scoreRevealMode: examScoreReveal,
-      shuffleQuestions: examShuffle,
-      status: 'published',
-      createdAt: new Date().toISOString(),
-    };
+    const calculatedMaxAttempts = examMaxAttemptsMode === 'limited' ? Math.max(1, examMaxAttempts) : 0;
+    const answerRevealMode: AnswerRevealMode = examShowAnswersImmediately ? 'immediate' : 'teacher-only';
+    const scoreRevealMode: ScoreRevealMode = examShowScoreImmediately ? 'immediate' : 'teacher-only';
 
-    onUpdateStore({ exams: [...store.exams, newExam] });
-    setShowAddExamModal(false);
-    setExamTitle('');
-    setExamSelectedQIds([]);
+    if (editingExamId) {
+      // Cập nhật bài kiểm tra đã có
+      const updatedExams = store.exams.map((e) => {
+        if (e.id === editingExamId) {
+          return {
+            ...e,
+            title: examTitle.trim(),
+            subject: examSubject,
+            grade: examGrade,
+            lessonIds: examLessonIds,
+            durationMinutes: examDuration,
+            scoreScale: examScale,
+            questionCount: examSelectedQIds.length,
+            questionIds: examSelectedQIds,
+            assignedClassCodes: examAssignedClasses,
+            answerRevealMode,
+            scoreRevealMode,
+            shuffleQuestions: examShuffle,
+            status: examStatus,
+            openTime: examOpenTime || undefined,
+            closeTime: examCloseTime || undefined,
+            maxAttempts: calculatedMaxAttempts,
+            showAnswersImmediately: examShowAnswersImmediately,
+            showScoreImmediately: examShowScoreImmediately,
+            questionSelectionMode: examQuestionSelectionMode,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+        return e;
+      });
+      onUpdateStore({ exams: updatedExams });
+    } else {
+      // Tạo mới bài kiểm tra
+      const newExam: Exam = {
+        id: `exam-${Date.now()}`,
+        title: examTitle.trim(),
+        subject: examSubject,
+        grade: examGrade,
+        lessonIds: examLessonIds,
+        durationMinutes: examDuration,
+        scoreScale: examScale,
+        questionCount: examSelectedQIds.length,
+        questionIds: examSelectedQIds,
+        assignedClassCodes: examAssignedClasses,
+        answerRevealMode,
+        scoreRevealMode,
+        shuffleQuestions: examShuffle,
+        status: examStatus,
+        createdAt: new Date().toISOString(),
+        openTime: examOpenTime || undefined,
+        closeTime: examCloseTime || undefined,
+        maxAttempts: calculatedMaxAttempts,
+        showAnswersImmediately: examShowAnswersImmediately,
+        showScoreImmediately: examShowScoreImmediately,
+        questionSelectionMode: examQuestionSelectionMode,
+      };
+      onUpdateStore({ exams: [newExam, ...store.exams] });
+    }
+
+    setShowExamModal(false);
+  };
+
+  const handleToggleExamStatus = (exam: Exam) => {
+    const newStatus: 'published' | 'closed' = exam.status === 'published' ? 'closed' : 'published';
+    const statusText = newStatus === 'published' ? 'Mở bài kiểm tra cho học sinh làm' : 'Đóng bài kiểm tra (tạm khóa)';
+    if (!confirm(`Bạn có chắc muốn ${statusText} bài: "${exam.title}"?`)) return;
+
+    const updated = store.exams.map((e) => (e.id === exam.id ? { ...e, status: newStatus } : e));
+    onUpdateStore({ exams: updated });
   };
 
   const handleDeleteExam = (id: string) => {
-    if (!confirm('Bạn có chắc muốn xóa đề kiểm tra này?')) return;
-    onUpdateStore({ exams: store.exams.filter((e) => e.id !== id) });
+    const exam = store.exams.find((e) => e.id === id);
+    const relatedSubmissions = store.submissions.filter((s) => s.examId === id);
+    let confirmMsg = `Bạn có chắc chắn muốn xóa bài kiểm tra "${exam?.title || id}"?`;
+    if (relatedSubmissions.length > 0) {
+      confirmMsg = `CẢNH BÁO: Đã có ${relatedSubmissions.length} lượt học sinh làm và nộp bài kiểm tra này!\nNếu bạn xóa, toàn bộ ${relatedSubmissions.length} kết quả nộp bài của học sinh cũng sẽ bị xóa khỏi hệ thống.\n\nBạn có chắc chắn muốn xóa bài kiểm tra này không?`;
+    }
+    if (!confirm(confirmMsg)) return;
+
+    onUpdateStore({
+      exams: store.exams.filter((e) => e.id !== id),
+      submissions: store.submissions.filter((s) => s.examId !== id),
+    });
+    setSelectedExamIds((prev) => prev.filter((item) => item !== id));
+  };
+
+  const handlePickRandomQuestions = () => {
+    let pool = store.questions.filter((q) => q.subject === examSubject && q.grade === examGrade);
+    if (examLessonIds.length > 0) {
+      const lessonPool = pool.filter((q) => examLessonIds.includes(q.lessonId));
+      if (lessonPool.length >= randomTargetCount) {
+        pool = lessonPool;
+      }
+    }
+
+    if (pool.length === 0) {
+      alert(`Không có câu hỏi nào trong ngân hàng cho môn ${examSubject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp ${examGrade}!`);
+      return;
+    }
+
+    const bietCount = Math.round((randomRatioBiet / 100) * randomTargetCount);
+    const hieuCount = Math.round((randomRatioHieu / 100) * randomTargetCount);
+    const vanDungCount = Math.max(0, randomTargetCount - bietCount - hieuCount);
+
+    const bietPool = pool.filter((q) => q.cognitiveLevel === 'biet').sort(() => Math.random() - 0.5);
+    const hieuPool = pool.filter((q) => q.cognitiveLevel === 'hieu').sort(() => Math.random() - 0.5);
+    const vanDungPool = pool.filter((q) => q.cognitiveLevel === 'van-dung').sort(() => Math.random() - 0.5);
+
+    const selected: string[] = [];
+    selected.push(...bietPool.slice(0, bietCount).map((q) => q.id));
+    selected.push(...hieuPool.slice(0, hieuCount).map((q) => q.id));
+    selected.push(...vanDungPool.slice(0, vanDungCount).map((q) => q.id));
+
+    if (selected.length < randomTargetCount) {
+      const remainingPool = pool.filter((q) => !selected.includes(q.id)).sort(() => Math.random() - 0.5);
+      const needed = randomTargetCount - selected.length;
+      selected.push(...remainingPool.slice(0, needed).map((q) => q.id));
+    }
+
+    setExamSelectedQIds(selected);
+    alert(`Đã tự động bốc ngẫu nhiên thành công ${selected.length} câu hỏi theo ma trận (${randomRatioBiet}% Biết, ${randomRatioHieu}% Hiểu, ${randomRatioVanDung}% Vận dụng)!`);
+  };
+
+  const handlePickAIQuestions = () => {
+    const aiQuestions = store.questions.filter(
+      (q) =>
+        q.subject === examSubject &&
+        q.grade === examGrade &&
+        (q.id.startsWith('ai-') || q.id.startsWith('gen-'))
+    );
+    if (aiQuestions.length === 0) {
+      alert(`Chưa tìm thấy câu hỏi do AI sinh cho môn ${examSubject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp ${examGrade}! Bạn có thể vào tab "Biên soạn" để nhờ AI tạo thêm.`);
+      return;
+    }
+    const aiIds = aiQuestions.map((q) => q.id);
+    const merged = Array.from(new Set([...examSelectedQIds, ...aiIds]));
+    setExamSelectedQIds(merged);
+    alert(`Đã thêm ${aiQuestions.length} câu hỏi do AI tạo vào bài kiểm tra!`);
   };
 
   // -------------------------------------------------------------
@@ -552,6 +770,18 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     setSelectedStudentIds([]);
   };
 
+  // Filtered Exams (Kiểm tra thường xuyên)
+  const filteredExams = store.exams.filter((exam) => {
+    const matchSubject = examFilterSubject === 'all' || exam.subject === examFilterSubject;
+    const matchGrade = examFilterGrade === 'all' || exam.grade.toString() === examFilterGrade;
+    const matchStatus = examFilterStatus === 'all' || exam.status === examFilterStatus;
+    const matchSearch =
+      !examSearchText.trim() ||
+      exam.title.toLowerCase().includes(examSearchText.toLowerCase()) ||
+      (exam.assignedClassCodes || []).some((c) => c.toLowerCase().includes(examSearchText.toLowerCase()));
+    return matchSubject && matchGrade && matchStatus && matchSearch;
+  });
+
   // Batch Exam deletion
   const handleToggleSelectExam = (id: string) => {
     setSelectedExamIds((prev) =>
@@ -560,20 +790,29 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   };
 
   const handleToggleSelectAllExams = () => {
-    if (selectedExamIds.length === store.exams.length && store.exams.length > 0) {
+    if (selectedExamIds.length === filteredExams.length && filteredExams.length > 0) {
       setSelectedExamIds([]);
     } else {
-      setSelectedExamIds(store.exams.map((e) => e.id));
+      setSelectedExamIds(filteredExams.map((e) => e.id));
     }
   };
 
   const handleBatchDeleteExams = () => {
     if (selectedExamIds.length === 0) return;
     const count = selectedExamIds.length;
-    if (!confirm(`Bạn có chắc chắn muốn xóa ${count} đề kiểm tra đã chọn?`)) return;
+    const relatedSubmissions = store.submissions.filter((s) => selectedExamIds.includes(s.examId));
+    let confirmMsg = `Bạn có chắc chắn muốn xóa ${count} bài kiểm tra thường xuyên đã chọn?`;
+    if (relatedSubmissions.length > 0) {
+      confirmMsg = `CẢNH BÁO: Trong các bài kiểm tra đã chọn, có ${relatedSubmissions.length} lượt nộp bài của học sinh!\nNếu bạn xóa, toàn bộ ${relatedSubmissions.length} kết quả này cũng sẽ bị xóa vĩnh viễn khỏi hệ thống.\n\nBạn có chắc chắn muốn xóa không?`;
+    }
+    if (!confirm(confirmMsg)) return;
 
-    const remaining = store.exams.filter((e) => !selectedExamIds.includes(e.id));
-    onUpdateStore({ exams: remaining });
+    const remainingExams = store.exams.filter((e) => !selectedExamIds.includes(e.id));
+    const remainingSubmissions = store.submissions.filter((s) => !selectedExamIds.includes(s.examId));
+    onUpdateStore({
+      exams: remainingExams,
+      submissions: remainingSubmissions,
+    });
     setSelectedExamIds([]);
   };
 
@@ -648,7 +887,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Đề kiểm tra
+            Kiểm tra thường xuyên
           </button>
           <button
             onClick={() => onTabChange('results')}
@@ -952,28 +1191,35 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         </div>
       )}
 
-      {/* ---------------- TAB 2: QUẢN LÝ ĐỀ KIỂM TRA ---------------- */}
+      {/* ---------------- TAB 2: QUẢN LÝ KIỂM TRA THƯỜNG XUYÊN ---------------- */}
       {activeTab === 'exams' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-6">
+          {/* Header & Controls */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 flex-wrap">
             <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Quản lý Đề kiểm tra thường xuyên
-              </h3>
-              <p className="text-xs text-slate-500">
-                Cấu hình thời gian, thang điểm 10/100, gán lớp và chế độ hiển thị đáp án ({store.exams.length} đề)
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900">
+                  Quản lý Kiểm tra thường xuyên
+                </h3>
+                <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
+                  {store.exams.length} bài
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Cấu hình thời gian làm bài, chọn câu hỏi (thủ công/AI/ngẫu nhiên), phân công lớp và mở/đóng bài kiểm tra
               </p>
             </div>
+
             <div className="flex items-center gap-2 flex-wrap">
-              {store.exams.length > 0 && (
-                <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none bg-slate-100 hover:bg-slate-200/80 px-2.5 py-2 rounded-xl transition-colors">
+              {filteredExams.length > 0 && (
+                <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none bg-slate-100 hover:bg-slate-200/80 px-3 py-2 rounded-xl transition-colors">
                   <input
                     type="checkbox"
-                    checked={selectedExamIds.length === store.exams.length && store.exams.length > 0}
+                    checked={selectedExamIds.length === filteredExams.length && filteredExams.length > 0}
                     onChange={handleToggleSelectAllExams}
                     className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
                   />
-                  <span className="font-medium">Chọn tất cả</span>
+                  <span className="font-medium">Chọn tất cả ({filteredExams.length})</span>
                 </label>
               )}
               {selectedExamIds.length > 0 && (
@@ -982,109 +1228,297 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs transition-colors"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>Xóa đề đã chọn ({selectedExamIds.length})</span>
+                  <span>Xóa đã chọn ({selectedExamIds.length})</span>
                 </button>
               )}
               <button
-                onClick={() => setShowAddExamModal(true)}
+                onClick={openCreateExamModal}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl shadow-xs transition-colors"
               >
                 <Plus className="w-4 h-4" />
-                <span>Tạo đề kiểm tra mới</span>
+                <span>Tạo bài kiểm tra mới</span>
               </button>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 text-xs">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">Tìm kiếm bài kiểm tra:</label>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Nhập tên bài, lớp..."
+                  value={examSearchText}
+                  onChange={(e) => setExamSearchText(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">Phân môn:</label>
+              <select
+                value={examFilterSubject}
+                onChange={(e) => setExamFilterSubject(e.target.value)}
+                className="w-full p-1.5 bg-white border border-slate-300 rounded-lg text-xs"
+              >
+                <option value="all">Tất cả phân môn</option>
+                <option value="lich-su">Lịch sử</option>
+                <option value="dia-li">Địa lí</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">Khối lớp:</label>
+              <select
+                value={examFilterGrade}
+                onChange={(e) => setExamFilterGrade(e.target.value)}
+                className="w-full p-1.5 bg-white border border-slate-300 rounded-lg text-xs"
+              >
+                <option value="all">Tất cả các khối</option>
+                <option value="6">Khối 6</option>
+                <option value="7">Khối 7</option>
+                <option value="8">Khối 8</option>
+                <option value="9">Khối 9</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-600 mb-1">Trạng thái mở/đóng:</label>
+              <select
+                value={examFilterStatus}
+                onChange={(e) => setExamFilterStatus(e.target.value)}
+                className="w-full p-1.5 bg-white border border-slate-300 rounded-lg text-xs"
+              >
+                <option value="all">Tất cả trạng thái</option>
+                <option value="published">Đang mở (Published)</option>
+                <option value="draft">Bản nháp (Draft)</option>
+                <option value="closed">Đã đóng (Closed)</option>
+              </select>
             </div>
           </div>
 
           {/* Exam Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {store.exams.map((exam) => {
+            {filteredExams.map((exam) => {
               const submissionCount = store.submissions.filter((s) => s.examId === exam.id).length;
               const isSelected = selectedExamIds.includes(exam.id);
+
+              // Lessons applied
+              const appliedLessonTitles = (exam.lessonIds || [])
+                .map((lid) => store.lessons.find((l) => l.id === lid)?.title)
+                .filter(Boolean);
+
+              // Status calculation
+              const now = new Date();
+              let statusLabel = 'Đang mở';
+              let statusBadgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+              let statusIcon = <CheckCircle2 className="w-3.5 h-3.5" />;
+
+              if (exam.status === 'draft') {
+                statusLabel = 'Bản nháp';
+                statusBadgeClass = 'bg-slate-100 text-slate-600 border-slate-200';
+                statusIcon = <Pencil className="w-3.5 h-3.5" />;
+              } else if (exam.status === 'closed') {
+                statusLabel = 'Đã đóng';
+                statusBadgeClass = 'bg-rose-50 text-rose-700 border-rose-200';
+                statusIcon = <Lock className="w-3.5 h-3.5" />;
+              } else if (exam.openTime && now < new Date(exam.openTime)) {
+                statusLabel = 'Sắp mở (Hẹn giờ)';
+                statusBadgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
+                statusIcon = <Clock className="w-3.5 h-3.5" />;
+              } else if (exam.closeTime && now > new Date(exam.closeTime)) {
+                statusLabel = 'Đã hết hạn';
+                statusBadgeClass = 'bg-orange-50 text-orange-700 border-orange-200';
+                statusIcon = <AlertTriangle className="w-3.5 h-3.5" />;
+              }
+
               return (
                 <div
                   key={exam.id}
-                  className={`p-5 rounded-2xl border transition-all shadow-2xs space-y-3 ${
+                  className={`p-5 rounded-2xl border transition-all shadow-2xs flex flex-col justify-between space-y-3.5 ${
                     isSelected
                       ? 'border-indigo-500 bg-indigo-50/20 ring-1 ring-indigo-500'
                       : 'border-slate-200 bg-white hover:border-indigo-300'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-start gap-2.5">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleToggleSelectExam(exam.id)}
-                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 mt-1 cursor-pointer"
-                      />
-                      <div>
+                  <div className="space-y-2.5">
+                    {/* Top row: Checkbox, Badges, Status */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelectExam(exam.id)}
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                        />
                         <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
                           exam.subject === 'lich-su' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
                         }`}>
                           {exam.subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} • Lớp {exam.grade}
                         </span>
-                        <h4 className="text-sm sm:text-base font-bold text-slate-900 mt-1">
-                          {exam.title}
-                        </h4>
+                        <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${statusBadgeClass}`}>
+                          {statusIcon}
+                          <span>{statusLabel}</span>
+                        </span>
+                      </div>
+
+                      <div className="text-[11px] text-slate-400 font-mono shrink-0">
+                        {exam.createdAt ? new Date(exam.createdAt).toLocaleDateString('vi-VN') : ''}
                       </div>
                     </div>
+
+                    {/* Exam Title */}
+                    <div>
+                      <h4 className="text-base font-bold text-slate-900 leading-snug">
+                        {exam.title}
+                      </h4>
+                    </div>
+
+                    {/* Applied Lessons */}
+                    <div className="flex items-start gap-1.5 text-xs text-slate-600 bg-slate-50/80 p-2 rounded-xl border border-slate-100">
+                      <BookOpen className="w-3.5 h-3.5 text-indigo-500 shrink-0 mt-0.5" />
+                      <div className="leading-relaxed">
+                        <span className="font-semibold text-slate-700">Bài học áp dụng: </span>
+                        {appliedLessonTitles.length > 0 ? (
+                          <span>{appliedLessonTitles.join(', ')}</span>
+                        ) : (
+                          <span className="text-slate-500 italic">Tất cả bài học (Tổng hợp kiến thức)</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Badges Info Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <div className="bg-slate-50 p-2 rounded-xl text-center border border-slate-100">
+                        <span className="text-slate-500 text-[10px] block">Thời gian</span>
+                        <span className="font-bold text-slate-800">{exam.durationMinutes} phút</span>
+                      </div>
+                      <div className="bg-slate-50 p-2 rounded-xl text-center border border-slate-100">
+                        <span className="text-slate-500 text-[10px] block">Số câu hỏi</span>
+                        <span className="font-bold text-slate-800">{exam.questionCount} câu</span>
+                      </div>
+                      <div className="bg-slate-50 p-2 rounded-xl text-center border border-slate-100">
+                        <span className="text-slate-500 text-[10px] block">Thang điểm</span>
+                        <span className="font-bold text-slate-800">Thang {exam.scoreScale}</span>
+                      </div>
+                      <div className="bg-slate-50 p-2 rounded-xl text-center border border-slate-100">
+                        <span className="text-slate-500 text-[10px] block">Đã nộp bài</span>
+                        <span className="font-bold text-indigo-700">{submissionCount} bài</span>
+                      </div>
+                    </div>
+
+                    {/* Details: Assigned classes, Window time, Attempt limits */}
+                    <div className="text-xs text-slate-600 space-y-1.5 pt-1.5 border-t border-slate-100">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">Lớp được giao:</span>
+                        <div className="flex gap-1 flex-wrap justify-end">
+                          {exam.assignedClassCodes && exam.assignedClassCodes.length > 0 ? (
+                            exam.assignedClassCodes.map((c) => (
+                              <span key={c} className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-100 font-mono font-bold text-[11px]">
+                                {c}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-rose-500 italic text-[11px]">Chưa gán lớp</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">Khung giờ mở bài:</span>
+                        <span className="font-medium text-slate-800 text-[11px]">
+                          {exam.openTime || exam.closeTime ? (
+                            <>
+                              {exam.openTime ? new Date(exam.openTime).toLocaleString('vi-VN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Bắt đầu ngay'}
+                              {' → '}
+                              {exam.closeTime ? new Date(exam.closeTime).toLocaleString('vi-VN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Không hết hạn'}
+                            </>
+                          ) : (
+                            'Không giới hạn thời gian'
+                          )}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500">Số lần làm lại:</span>
+                        <span className="font-semibold text-slate-800 text-[11px]">
+                          {exam.maxAttempts && exam.maxAttempts > 0 ? `Tối đa ${exam.maxAttempts} lần` : 'Không giới hạn (làm tự do)'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-slate-500">Hiện điểm / Đáp án:</span>
+                        <span className="font-medium text-slate-700">
+                          {exam.showScoreImmediately ?? exam.scoreRevealMode === 'immediate' ? 'Hiện điểm' : 'Bảo mật điểm'} • {exam.showAnswersImmediately ?? exam.answerRevealMode === 'immediate' ? 'Hiện đáp án' : 'Ẩn đáp án'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions Footer */}
+                  <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100">
                     <button
-                      onClick={() => handleDeleteExam(exam.id)}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition-colors"
-                      title="Xóa đề"
+                      onClick={() => handleToggleExamStatus(exam)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl border transition-colors ${
+                        exam.status === 'published'
+                          ? 'border-slate-300 text-slate-700 hover:bg-slate-100'
+                          : 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                      }`}
+                      title={exam.status === 'published' ? 'Đóng bài kiểm tra (học sinh không vào làm được)' : 'Mở cho học sinh làm bài'}
                     >
-                      <Trash2 className="w-4 h-4" />
+                      {exam.status === 'published' ? (
+                        <>
+                          <Lock className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Đóng bài</span>
+                        </>
+                      ) : (
+                        <>
+                          <Unlock className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Mở bài</span>
+                        </>
+                      )}
                     </button>
-                  </div>
 
-                  {/* Badges Info */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                    <div className="bg-slate-50 p-2 rounded-lg text-center">
-                      <span className="text-slate-500 text-[10px] block">Thời gian</span>
-                      <span className="font-bold text-slate-800">{exam.durationMinutes} phút</span>
-                    </div>
-                    <div className="bg-slate-50 p-2 rounded-lg text-center">
-                      <span className="text-slate-500 text-[10px] block">Số câu</span>
-                      <span className="font-bold text-slate-800">{exam.questionCount} câu</span>
-                    </div>
-                    <div className="bg-slate-50 p-2 rounded-lg text-center">
-                      <span className="text-slate-500 text-[10px] block">Thang điểm</span>
-                      <span className="font-bold text-slate-800">Thang {exam.scoreScale}</span>
-                    </div>
-                    <div className="bg-slate-50 p-2 rounded-lg text-center">
-                      <span className="text-slate-500 text-[10px] block">Đã nộp bài</span>
-                      <span className="font-bold text-indigo-700">{submissionCount} bài</span>
-                    </div>
-                  </div>
-
-                  {/* Config details */}
-                  <div className="text-xs text-slate-600 space-y-1 pt-1 border-t border-slate-100">
-                    <div className="flex items-center justify-between">
-                      <span>Lớp được giao:</span>
-                      <div className="flex gap-1">
-                        {exam.assignedClassCodes.map((c) => (
-                          <span key={c} className="px-1.5 py-0.5 rounded bg-slate-100 font-mono font-bold text-[11px]">
-                            {c}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Chế độ đáp án:</span>
-                      <span className="font-semibold text-slate-800">
-                        {exam.answerRevealMode === 'immediate' ? 'Hiện ngay sau nộp' : exam.answerRevealMode === 'teacher-only' ? 'Chỉ giáo viên xem' : 'Ẩn đáp án'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Trộn câu hỏi:</span>
-                      <span className="font-semibold text-emerald-700">
-                        {exam.shuffleQuestions ? 'Bật (trộn ngẫu nhiên)' : 'Tắt'}
-                      </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => openEditExamModal(exam)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span>Sửa</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteExam(exam.id)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Xóa</span>
+                      </button>
                     </div>
                   </div>
                 </div>
               );
             })}
+
+            {filteredExams.length === 0 && (
+              <div className="col-span-1 md:col-span-2 text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                <FileSpreadsheet className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm font-bold text-slate-700">Chưa tìm thấy bài kiểm tra nào phù hợp</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Hãy thử thay đổi điều kiện lọc hoặc bấm "Tạo bài kiểm tra mới" để thiết lập.
+                </p>
+                <button
+                  onClick={openCreateExamModal}
+                  className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl shadow-xs transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tạo bài kiểm tra mới ngay</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1775,204 +2209,845 @@ HS603	Lê Hoàng Cường`}
         </div>
       )}
 
-      {/* ---------------- MODAL: TẠO ĐỀ KIỂM TRA MỚI ---------------- */}
-      {showAddExamModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-6 space-y-4 my-8 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-base font-bold text-slate-900">Thiết lập Đề kiểm tra mới</h3>
-
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Môn học</label>
-                <select
-                  value={examSubject}
-                  onChange={(e) => setExamSubject(e.target.value as SubjectType)}
-                  className="w-full p-2 border border-slate-300 rounded-lg bg-white"
-                >
-                  <option value="lich-su">Lịch sử</option>
-                  <option value="dia-li">Địa lí</option>
-                </select>
+      {/* ---------------- MODAL: TẠO / SỬA BÀI KIỂM TRA THƯỜNG XUYÊN ---------------- */}
+      {showExamModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full p-5 sm:p-7 space-y-5 my-6 max-h-[92vh] overflow-y-auto border border-slate-100">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-indigo-50 text-indigo-700">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-bold text-slate-900">
+                    {editingExamId ? 'Chỉnh sửa bài Kiểm tra thường xuyên' : 'Tạo bài Kiểm tra thường xuyên mới'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Thiết lập phân môn, bài học áp dụng, thời gian làm bài, phân công lớp và câu hỏi
+                  </p>
+                </div>
               </div>
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Khối lớp</label>
-                <select
-                  value={examGrade}
-                  onChange={(e) => setExamGrade(Number(e.target.value) as GradeLevel)}
-                  className="w-full p-2 border border-slate-300 rounded-lg bg-white"
-                >
-                  <option value={6}>Lớp 6</option>
-                  <option value={7}>Lớp 7</option>
-                  <option value={8}>Lớp 8</option>
-                  <option value={9}>Lớp 9</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Tên bài kiểm tra (ví dụ: "Kiểm tra 15 phút - Lịch sử 6 Bài 1 & 3")
-              </label>
-              <input
-                type="text"
-                placeholder="Nhập tên đề kiểm tra..."
-                value={examTitle}
-                onChange={(e) => setExamTitle(e.target.value)}
-                className="w-full text-sm p-2.5 border border-slate-300 rounded-xl"
-              />
-            </div>
-
-            {/* Config: Duration, Score scale, Answer reveal, Shuffle */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Thời gian (phút)</label>
-                <input
-                  type="number"
-                  min={5}
-                  max={120}
-                  value={examDuration}
-                  onChange={(e) => setExamDuration(Number(e.target.value))}
-                  className="w-full p-2 border border-slate-300 rounded-lg font-bold"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Thang điểm</label>
-                <select
-                  value={examScale}
-                  onChange={(e) => setExamScale(Number(e.target.value) as ScoreScale)}
-                  className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold"
-                >
-                  <option value={10}>Thang 10</option>
-                  <option value={100}>Thang 100</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Hiện đáp án</label>
-                <select
-                  value={examAnswerReveal}
-                  onChange={(e) => setExamAnswerReveal(e.target.value as AnswerRevealMode)}
-                  className="w-full p-2 border border-slate-300 rounded-lg bg-white"
-                >
-                  <option value="immediate">Hiện ngay sau khi nộp</option>
-                  <option value="teacher-only">Chỉ giáo viên xem</option>
-                  <option value="hidden">Không hiện đáp án</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Hiện điểm số</label>
-                <select
-                  value={examScoreReveal}
-                  onChange={(e) => setExamScoreReveal(e.target.value as ScoreRevealMode)}
-                  className="w-full p-2 border border-slate-300 rounded-lg bg-white"
-                >
-                  <option value="immediate">Hiện ngay cho HS</option>
-                  <option value="teacher-only">Chỉ lưu cho GV</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Assigned Classes */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Gán cho các lớp làm bài:
-              </label>
-              <div className="flex flex-wrap gap-2 text-xs">
-                {store.classrooms
-                  .filter((c) => c.grade === examGrade)
-                  .map((cls) => (
-                    <label key={cls.id} className="flex items-center gap-1.5 p-2 bg-slate-50 border rounded-lg cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={examAssignedClasses.includes(cls.classCode)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setExamAssignedClasses([...examAssignedClasses, cls.classCode]);
-                          } else {
-                            setExamAssignedClasses(examAssignedClasses.filter((x) => x !== cls.classCode));
-                          }
-                        }}
-                        className="rounded text-indigo-600"
-                      />
-                      <span className="font-bold">{cls.classCode}</span>
-                    </label>
-                  ))}
-              </div>
-            </div>
-
-            {/* Select Questions from Bank */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-bold text-slate-800">
-                  Chọn câu hỏi từ Ngân hàng (Đã chọn: {examSelectedQIds.length} câu):
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const available = store.questions
-                      .filter((q) => q.subject === examSubject && q.grade === examGrade)
-                      .map((q) => q.id);
-                    setExamSelectedQIds(available);
-                  }}
-                  className="text-xs text-indigo-600 font-semibold hover:underline"
-                >
-                  Chọn tất cả câu của lớp {examGrade}
-                </button>
-              </div>
-
-              <div className="max-h-56 overflow-y-auto space-y-2 border border-slate-200 rounded-xl p-2 bg-slate-50 text-xs">
-                {store.questions
-                  .filter((q) => q.subject === examSubject && q.grade === examGrade)
-                  .map((q, idx) => {
-                    const isSelected = examSelectedQIds.includes(q.id);
-                    return (
-                      <div
-                        key={q.id}
-                        onClick={() => {
-                          if (isSelected) {
-                            setExamSelectedQIds(examSelectedQIds.filter((id) => id !== q.id));
-                          } else {
-                            setExamSelectedQIds([...examSelectedQIds, q.id]);
-                          }
-                        }}
-                        className={`p-2.5 rounded-lg border cursor-pointer flex items-start gap-2.5 transition-all ${
-                          isSelected ? 'bg-indigo-50/80 border-indigo-300 text-indigo-950 font-medium' : 'bg-white border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          readOnly
-                          className="mt-0.5 rounded text-indigo-600"
-                        />
-                        <div className="flex-1">
-                          <span className="font-bold text-slate-500 mr-1.5">[{idx + 1}]</span>
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 mr-1.5">
-                            {q.cognitiveLevel.toUpperCase()}
-                          </span>
-                          <span>{q.questionText}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setShowAddExamModal(false)}
-                className="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg"
+                onClick={() => setShowExamModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
               >
-                Hủy
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form Body */}
+            <div className="space-y-5 text-xs">
+              {/* PHẦN 1: THÔNG TIN CHUNG & BÀI HỌC ÁP DỤNG */}
+              <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/70 space-y-3.5">
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                  1. Thông tin chung & Bài học áp dụng
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Phân môn <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={examSubject}
+                      onChange={(e) => {
+                        const newSub = e.target.value as SubjectType;
+                        setExamSubject(newSub);
+                        setExamLessonIds([]);
+                        setExamSelectedQIds([]);
+                      }}
+                      className="w-full p-2.5 border border-slate-300 rounded-xl bg-white font-medium"
+                    >
+                      <option value="lich-su">Lịch sử</option>
+                      <option value="dia-li">Địa lí</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Khối lớp <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={examGrade}
+                      onChange={(e) => {
+                        const newG = Number(e.target.value) as GradeLevel;
+                        setExamGrade(newG);
+                        setExamLessonIds([]);
+                        setExamSelectedQIds([]);
+                        // Tự động gán các lớp thuộc khối mới
+                        const defaultClasses = store.classrooms.filter((c) => c.grade === newG).map((c) => c.classCode);
+                        setExamAssignedClasses(defaultClasses);
+                      }}
+                      className="w-full p-2.5 border border-slate-300 rounded-xl bg-white font-medium"
+                    >
+                      <option value={6}>Lớp 6</option>
+                      <option value={7}>Lớp 7</option>
+                      <option value={8}>Lớp 8</option>
+                      <option value={9}>Lớp 9</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Trạng thái phát hành
+                    </label>
+                    <select
+                      value={examStatus}
+                      onChange={(e) => setExamStatus(e.target.value as 'published' | 'draft' | 'closed')}
+                      className="w-full p-2.5 border border-slate-300 rounded-xl bg-white font-medium"
+                    >
+                      <option value="published">Đang mở (Published)</option>
+                      <option value="draft">Bản nháp (Draft)</option>
+                      <option value="closed">Đã đóng (Closed)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Tên bài kiểm tra <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ví dụ: Kiểm tra thường xuyên 15 phút - Lịch sử 6 Bài 1 & 2"
+                    value={examTitle}
+                    onChange={(e) => setExamTitle(e.target.value)}
+                    className="w-full p-2.5 text-xs sm:text-sm border border-slate-300 rounded-xl bg-white font-medium focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                </div>
+
+                {/* Lesson Picker */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+                    <label className="font-semibold text-slate-700">
+                      Bài học cụ thể áp dụng (chọn các bài có trong nội dung kiểm tra):
+                    </label>
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allLids = store.lessons
+                            .filter((l) => l.subject === examSubject && l.grade === examGrade)
+                            .map((l) => l.id);
+                          setExamLessonIds(allLids);
+                        }}
+                        className="text-indigo-600 hover:underline font-medium"
+                      >
+                        Chọn tất cả bài
+                      </button>
+                      <span className="text-slate-300">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setExamLessonIds([])}
+                        className="text-slate-500 hover:underline font-medium"
+                      >
+                        Bỏ chọn (Kiểm tra tổng hợp)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 bg-white rounded-xl border border-slate-200">
+                    {store.lessons
+                      .filter((l) => l.subject === examSubject && l.grade === examGrade)
+                      .map((lesson) => {
+                        const isChecked = examLessonIds.includes(lesson.id);
+                        return (
+                          <button
+                            type="button"
+                            key={lesson.id}
+                            onClick={() => {
+                              if (isChecked) {
+                                setExamLessonIds(examLessonIds.filter((id) => id !== lesson.id));
+                              } else {
+                                setExamLessonIds([...examLessonIds, lesson.id]);
+                              }
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all text-left ${
+                              isChecked
+                                ? 'bg-indigo-600 text-white shadow-2xs'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200/80'
+                            }`}
+                          >
+                            {lesson.title}
+                          </button>
+                        );
+                      })}
+                    {store.lessons.filter((l) => l.subject === examSubject && l.grade === examGrade).length === 0 && (
+                      <span className="text-slate-400 italic text-[11px] p-1">
+                        Chưa có bài học nào được định nghĩa cho môn {examSubject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp {examGrade}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* PHẦN 2: PHÂN CÔNG LỚP & THỜI GIAN */}
+              <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/70 space-y-3.5">
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                  2. Phân công lớp & Thời gian làm bài
+                </span>
+
+                {/* Assigned Classes */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5 flex-wrap gap-1">
+                    <label className="font-semibold text-slate-700">
+                      Gán cho các lớp làm bài <span className="text-rose-500">*</span>:
+                    </label>
+                    <div className="flex items-center gap-2 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allClasses = store.classrooms
+                            .filter((c) => c.grade === examGrade)
+                            .map((c) => c.classCode);
+                          setExamAssignedClasses(allClasses);
+                        }}
+                        className="text-indigo-600 hover:underline font-medium"
+                      >
+                        Chọn tất cả lớp khối {examGrade}
+                      </button>
+                      <span className="text-slate-300">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setExamAssignedClasses([])}
+                        className="text-slate-500 hover:underline font-medium"
+                      >
+                        Bỏ chọn tất cả
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {store.classrooms
+                      .filter((c) => c.grade === examGrade)
+                      .map((cls) => {
+                        const isChecked = examAssignedClasses.includes(cls.classCode);
+                        return (
+                          <label
+                            key={cls.id}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border cursor-pointer transition-all ${
+                              isChecked
+                                ? 'bg-indigo-50 border-indigo-300 text-indigo-900 font-bold'
+                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setExamAssignedClasses([...examAssignedClasses, cls.classCode]);
+                                } else {
+                                  setExamAssignedClasses(examAssignedClasses.filter((x) => x !== cls.classCode));
+                                }
+                              }}
+                              className="rounded text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span>{cls.classCode}</span>
+                            <span className="text-[10px] text-slate-400 font-normal">({cls.studentCount} HS)</span>
+                          </label>
+                        );
+                      })}
+                    {store.classrooms.filter((c) => c.grade === examGrade).length === 0 && (
+                      <span className="text-rose-500 italic text-[11px]">
+                        Chưa có lớp học nào thuộc khối {examGrade}. Hãy tạo lớp ở tab "Lớp học & Học sinh".
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Duration & Presets */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Thời gian làm bài (phút) <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={180}
+                        required
+                        value={examDuration}
+                        onChange={(e) => setExamDuration(Number(e.target.value))}
+                        className="w-24 p-2 border border-slate-300 rounded-xl bg-white font-bold text-center text-sm"
+                      />
+                      <div className="flex items-center gap-1">
+                        {[15, 20, 30, 45].map((preset) => (
+                          <button
+                            type="button"
+                            key={preset}
+                            onClick={() => setExamDuration(preset)}
+                            className={`px-2 py-1 rounded-lg border text-[11px] font-semibold transition-all ${
+                              examDuration === preset
+                                ? 'bg-indigo-600 border-indigo-600 text-white'
+                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                            }`}
+                          >
+                            {preset}p
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Thang điểm đánh giá
+                    </label>
+                    <select
+                      value={examScale}
+                      onChange={(e) => setExamScale(Number(e.target.value) as ScoreScale)}
+                      className="w-full p-2.5 border border-slate-300 rounded-xl bg-white font-bold"
+                    >
+                      <option value={10}>Thang điểm 10 (tiêu chuẩn phổ thông)</option>
+                      <option value={100}>Thang điểm 100</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Open & Close Timestamps */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-200/60">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Thời gian bắt đầu mở bài (tùy chọn):
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={examOpenTime}
+                      onChange={(e) => setExamOpenTime(e.target.value)}
+                      className="w-full p-2 border border-slate-300 rounded-xl bg-white text-xs font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Thời gian hết hạn/đóng bài (tùy chọn):
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={examCloseTime}
+                      onChange={(e) => setExamCloseTime(e.target.value)}
+                      className="w-full p-2 border border-slate-300 rounded-xl bg-white text-xs font-mono"
+                    />
+                  </div>
+                  <div className="col-span-1 sm:col-span-2 text-[11px] text-slate-500 italic">
+                    * Mẹo: Để trống cả 2 ô nếu cho phép học sinh làm bài tự do bất cứ lúc nào (không giới hạn khung giờ).
+                  </div>
+                </div>
+              </div>
+
+              {/* PHẦN 3: CÀI ĐẶT LÀM BÀI & KẾT QUẢ */}
+              <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/70 space-y-3.5">
+                <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                  3. Quy định làm bài & Hiển thị kết quả
+                </span>
+
+                {/* Max attempts & Shuffle */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Số lần học sinh được phép làm bài:
+                    </label>
+                    <div className="space-y-1.5">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="attemptsMode"
+                          checked={examMaxAttemptsMode === 'unlimited'}
+                          onChange={() => setExamMaxAttemptsMode('unlimited')}
+                          className="text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="text-slate-700">Không giới hạn (làm tự do nhiều lần)</span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="attemptsMode"
+                            checked={examMaxAttemptsMode === 'limited'}
+                            onChange={() => setExamMaxAttemptsMode('limited')}
+                            className="text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="text-slate-700">Giới hạn số lần làm:</span>
+                        </label>
+                        {examMaxAttemptsMode === 'limited' && (
+                          <input
+                            type="number"
+                            min={1}
+                            max={10}
+                            value={examMaxAttempts}
+                            onChange={(e) => setExamMaxAttempts(Number(e.target.value))}
+                            className="w-16 p-1 text-center font-bold border border-slate-300 rounded-lg bg-white"
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Trộn ngẫu nhiên câu hỏi:
+                    </label>
+                    <label className="flex items-center gap-2 p-2 bg-white rounded-xl border border-slate-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={examShuffle}
+                        onChange={(e) => setExamShuffle(e.target.checked)}
+                        className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                      />
+                      <span className="font-semibold text-slate-800">
+                        Xáo trộn thứ tự câu hỏi khi học sinh mở bài làm
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Score & Answer Reveal */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200/60">
+                  <label className="flex items-start gap-2.5 p-3 bg-white rounded-xl border border-slate-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={examShowScoreImmediately}
+                      onChange={(e) => setExamShowScoreImmediately(e.target.checked)}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 mt-0.5"
+                    />
+                    <div>
+                      <span className="font-semibold text-slate-800 block">
+                        Hiện điểm số ngay sau khi nộp bài
+                      </span>
+                      <span className="text-[11px] text-slate-500 block mt-0.5">
+                        Học sinh biết ngay điểm đạt được. Nếu tắt, chỉ giáo viên mới thấy điểm.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-2.5 p-3 bg-white rounded-xl border border-slate-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={examShowAnswersImmediately}
+                      onChange={(e) => setExamShowAnswersImmediately(e.target.checked)}
+                      className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 mt-0.5"
+                    />
+                    <div>
+                      <span className="font-semibold text-slate-800 block">
+                        Hiện đáp án đúng & giải thích sau khi nộp
+                      </span>
+                      <span className="text-[11px] text-slate-500 block mt-0.5">
+                        Cho phép học sinh xem lại chi tiết các câu đúng/sai để tự ôn tập.
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* PHẦN 4: CHỌN CÂU HỎI CHO BÀI KIỂM TRA */}
+              <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/70 space-y-3.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                    4. Chọn câu hỏi cho bài kiểm tra
+                  </span>
+
+                  {/* Mode Tabs */}
+                  <div className="flex items-center gap-1 p-1 bg-white rounded-xl border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setExamQuestionSelectionMode('manual')}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                        examQuestionSelectionMode === 'manual'
+                          ? 'bg-indigo-600 text-white shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      Thủ công từ ngân hàng
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExamQuestionSelectionMode('ai')}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                        examQuestionSelectionMode === 'ai'
+                          ? 'bg-indigo-600 text-white shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      Dùng câu AI sinh sẵn
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExamQuestionSelectionMode('random')}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                        examQuestionSelectionMode === 'random'
+                          ? 'bg-indigo-600 text-white shadow-2xs'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      Bốc ngẫu nhiên ma trận
+                    </button>
+                  </div>
+                </div>
+
+                {/* TAB 1: THỦ CÔNG TỪ NGÂN HÀNG */}
+                {examQuestionSelectionMode === 'manual' && (
+                  <div className="space-y-3">
+                    {/* Filters bar in picker */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-white p-2.5 rounded-xl border border-slate-200 text-xs">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          placeholder="Tìm câu hỏi..."
+                          value={qPickerSearch}
+                          onChange={(e) => setQPickerSearch(e.target.value)}
+                          className="w-full pl-8 pr-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </div>
+
+                      <select
+                        value={qPickerLevelFilter}
+                        onChange={(e) => setQPickerLevelFilter(e.target.value as any)}
+                        className="p-1.5 border border-slate-200 rounded-lg text-xs bg-white"
+                      >
+                        <option value="all">Mọi mức độ nhận thức</option>
+                        <option value="biet">Chỉ mức Biết (Nhận biết)</option>
+                        <option value="hieu">Chỉ mức Hiểu (Thông hiểu)</option>
+                        <option value="van-dung">Chỉ mức Vận dụng</option>
+                      </select>
+
+                      <select
+                        value={qPickerLessonFilter}
+                        onChange={(e) => setQPickerLessonFilter(e.target.value)}
+                        className="p-1.5 border border-slate-200 rounded-lg text-xs bg-white"
+                      >
+                        <option value="all">Mọi bài học</option>
+                        {store.lessons
+                          .filter((l) => l.subject === examSubject && l.grade === examGrade)
+                          .map((l) => (
+                            <option key={l.id} value={l.id}>{l.title}</option>
+                          ))}
+                      </select>
+                    </div>
+
+                    {/* Quick selection buttons */}
+                    <div className="flex items-center justify-between text-xs px-1">
+                      <span className="text-slate-500 font-medium">
+                        Hiển thị {
+                          store.questions.filter((q) => {
+                            if (q.subject !== examSubject || q.grade !== examGrade) return false;
+                            if (qPickerLevelFilter !== 'all' && q.cognitiveLevel !== qPickerLevelFilter) return false;
+                            if (qPickerLessonFilter !== 'all' && q.lessonId !== qPickerLessonFilter) return false;
+                            if (qPickerSearch.trim() && !q.questionText.toLowerCase().includes(qPickerSearch.toLowerCase())) return false;
+                            return true;
+                          }).length
+                        } câu hỏi phù hợp
+                      </span>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const matched = store.questions
+                              .filter((q) => {
+                                if (q.subject !== examSubject || q.grade !== examGrade) return false;
+                                if (qPickerLevelFilter !== 'all' && q.cognitiveLevel !== qPickerLevelFilter) return false;
+                                if (qPickerLessonFilter !== 'all' && q.lessonId !== qPickerLessonFilter) return false;
+                                if (qPickerSearch.trim() && !q.questionText.toLowerCase().includes(qPickerSearch.toLowerCase())) return false;
+                                return true;
+                              })
+                              .map((q) => q.id);
+                            const combined = Array.from(new Set([...examSelectedQIds, ...matched]));
+                            setExamSelectedQIds(combined);
+                          }}
+                          className="text-indigo-600 hover:underline font-semibold"
+                        >
+                          + Chọn các câu đang lọc
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => setExamSelectedQIds([])}
+                          className="text-slate-500 hover:underline font-semibold"
+                        >
+                          Bỏ chọn tất cả
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Scrollable Questions list */}
+                    <div className="max-h-60 overflow-y-auto space-y-2 border border-slate-200 rounded-xl p-2 bg-white text-xs">
+                      {store.questions
+                        .filter((q) => {
+                          if (q.subject !== examSubject || q.grade !== examGrade) return false;
+                          if (qPickerLevelFilter !== 'all' && q.cognitiveLevel !== qPickerLevelFilter) return false;
+                          if (qPickerLessonFilter !== 'all' && q.lessonId !== qPickerLessonFilter) return false;
+                          if (qPickerSearch.trim() && !q.questionText.toLowerCase().includes(qPickerSearch.toLowerCase())) return false;
+                          return true;
+                        })
+                        .map((q, idx) => {
+                          const isSelected = examSelectedQIds.includes(q.id);
+                          return (
+                            <div
+                              key={q.id}
+                              onClick={() => {
+                                if (isSelected) {
+                                  setExamSelectedQIds(examSelectedQIds.filter((id) => id !== q.id));
+                                } else {
+                                  setExamSelectedQIds([...examSelectedQIds, q.id]);
+                                }
+                              }}
+                              className={`p-2.5 rounded-xl border cursor-pointer flex items-start gap-2.5 transition-all ${
+                                isSelected
+                                  ? 'bg-indigo-50/80 border-indigo-300 text-indigo-950 font-medium ring-1 ring-indigo-400'
+                                  : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                readOnly
+                                className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                              />
+                              <div className="flex-1 space-y-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-bold text-slate-500 text-[11px]">#{idx + 1}</span>
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                                    q.cognitiveLevel === 'biet'
+                                      ? 'bg-sky-100 text-sky-800'
+                                      : q.cognitiveLevel === 'hieu'
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : 'bg-purple-100 text-purple-800'
+                                  }`}>
+                                    {q.cognitiveLevel}
+                                  </span>
+                                  {q.isAIGenerated && (
+                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                                      AI
+                                    </span>
+                                  )}
+                                  <span className="text-[10px] text-slate-400">
+                                    {store.lessons.find((l) => l.id === q.lessonId)?.title || q.lessonId}
+                                  </span>
+                                </div>
+                                <p className="text-xs leading-relaxed line-clamp-2">
+                                  {q.questionText}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 2: DÙNG CÂU DO AI SINH SẴN */}
+                {examQuestionSelectionMode === 'ai' && (
+                  <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <h4 className="font-bold text-slate-800 text-xs sm:text-sm">
+                          Câu hỏi được tạo bởi Trí tuệ nhân tạo (AI)
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Chọn các câu hỏi đã được tạo từ tính năng "AI Biên soạn" hoặc "AI Tạo câu hỏi"
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handlePickAIQuestions}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 rounded-xl shadow-xs transition-colors"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Thêm toàn bộ câu do AI tạo</span>
+                      </button>
+                    </div>
+
+                    <div className="max-h-56 overflow-y-auto space-y-2 border border-slate-200 rounded-xl p-2 bg-slate-50 text-xs">
+                      {store.questions
+                        .filter((q) => q.subject === examSubject && q.grade === examGrade && q.isAIGenerated)
+                        .map((q) => {
+                          const isSelected = examSelectedQIds.includes(q.id);
+                          return (
+                            <div
+                              key={q.id}
+                              onClick={() => {
+                                if (isSelected) {
+                                  setExamSelectedQIds(examSelectedQIds.filter((id) => id !== q.id));
+                                } else {
+                                  setExamSelectedQIds([...examSelectedQIds, q.id]);
+                                }
+                              }}
+                              className={`p-2.5 rounded-xl border cursor-pointer flex items-start gap-2.5 transition-all ${
+                                isSelected ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-medium' : 'bg-white border-slate-200'
+                              }`}
+                            >
+                              <input type="checkbox" checked={isSelected} readOnly className="mt-0.5 rounded text-emerald-600" />
+                              <div className="flex-1">
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 uppercase">
+                                    AI • {q.cognitiveLevel}
+                                  </span>
+                                  <span className="text-[10px] text-slate-500">
+                                    {store.lessons.find((l) => l.id === q.lessonId)?.title || q.lessonId}
+                                  </span>
+                                </div>
+                                <span>{q.questionText}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      {store.questions.filter((q) => q.subject === examSubject && q.grade === examGrade && q.isAIGenerated).length === 0 && (
+                        <div className="text-center py-6 text-slate-400 italic">
+                          Chưa có câu hỏi nào do AI tạo trong môn {examSubject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} lớp {examGrade}.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 3: BỐC NGẪU NHIÊN THEO MA TRẬN */}
+                {examQuestionSelectionMode === 'random' && (
+                  <div className="space-y-3 bg-white p-4 rounded-xl border border-slate-200">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-xs sm:text-sm">
+                        Bốc đề ngẫu nhiên theo ma trận nhận thức
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Hệ thống sẽ tự động bốc câu hỏi từ ngân hàng theo đúng tỷ lệ Biết - Hiểu - Vận dụng
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs bg-slate-50 p-3 rounded-xl border border-slate-200/80">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">
+                          Tổng số câu cần ra:
+                        </label>
+                        <input
+                          type="number"
+                          min={2}
+                          max={50}
+                          value={randomTargetCount}
+                          onChange={(e) => setRandomTargetCount(Number(e.target.value))}
+                          className="w-full p-2 border border-slate-300 rounded-lg bg-white font-bold text-center"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-sky-800 mb-1">
+                          % Nhận biết (Biết):
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={randomRatioBiet}
+                            onChange={(e) => setRandomRatioBiet(Number(e.target.value))}
+                            className="w-full p-2 border border-sky-300 rounded-lg bg-white font-bold text-center"
+                          />
+                          <span className="font-bold text-slate-500">%</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-amber-800 mb-1">
+                          % Thông hiểu (Hiểu):
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={randomRatioHieu}
+                            onChange={(e) => setRandomRatioHieu(Number(e.target.value))}
+                            className="w-full p-2 border border-amber-300 rounded-lg bg-white font-bold text-center"
+                          />
+                          <span className="font-bold text-slate-500">%</span>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold text-purple-800 mb-1">
+                          % Vận dụng:
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={randomRatioVanDung}
+                            onChange={(e) => setRandomRatioVanDung(Number(e.target.value))}
+                            className="w-full p-2 border border-purple-300 rounded-lg bg-white font-bold text-center"
+                          />
+                          <span className="font-bold text-slate-500">%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+                      <span className="text-[11px] text-slate-500">
+                        Tổng tỉ lệ: <strong className={randomRatioBiet + randomRatioHieu + randomRatioVanDung === 100 ? 'text-emerald-600' : 'text-rose-600'}>{randomRatioBiet + randomRatioHieu + randomRatioVanDung}%</strong>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handlePickRandomQuestions}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl shadow-xs transition-colors"
+                      >
+                        <Shuffle className="w-3.5 h-3.5" />
+                        <span>Bốc ngẫu nhiên ngay</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Question Selection Summary */}
+                <div className="flex items-center justify-between p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-indigo-700" />
+                    <span className="font-bold text-indigo-950 text-xs">
+                      Đã chọn: {examSelectedQIds.length} câu hỏi
+                    </span>
+                    <span className="text-[11px] text-indigo-800">
+                      (Biết: {
+                        store.questions.filter((q) => examSelectedQIds.includes(q.id) && q.cognitiveLevel === 'biet').length
+                      }, Hiểu: {
+                        store.questions.filter((q) => examSelectedQIds.includes(q.id) && q.cognitiveLevel === 'hieu').length
+                      }, Vận dụng: {
+                        store.questions.filter((q) => examSelectedQIds.includes(q.id) && q.cognitiveLevel === 'van-dung').length
+                      })
+                    </span>
+                  </div>
+
+                  {examSelectedQIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setExamSelectedQIds([])}
+                      className="text-xs text-rose-600 hover:underline font-semibold"
+                    >
+                      Bỏ chọn tất cả
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowExamModal(false)}
+                className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+              >
+                Hủy bỏ
               </button>
               <button
                 type="button"
-                onClick={handleCreateExam}
-                className="px-4 py-2 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl shadow-xs"
+                onClick={handleSaveExam}
+                className="inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl shadow-xs transition-colors"
               >
-                Phát hành đề kiểm tra
+                <Save className="w-4 h-4" />
+                <span>{editingExamId ? 'Cập nhật bài kiểm tra' : 'Lưu & Phát hành bài kiểm tra'}</span>
               </button>
             </div>
           </div>

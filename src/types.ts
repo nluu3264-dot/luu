@@ -80,6 +80,7 @@ export interface Question {
   essayGuide?: string; // Gợi ý chấm điểm
   
   explanation?: string;
+  isAIGenerated?: boolean;
   createdAt: string;
 }
 
@@ -112,7 +113,8 @@ export interface Exam {
   title: string;
   subject: SubjectType;
   grade: GradeLevel;
-  lessonIds: string[]; // Các bài học trong phạm vi đề
+  lessonIds: string[]; // Các bài học trong phạm vi đề (hoặc rỗng nếu toàn bộ)
+  lessonNames?: string[];
   durationMinutes: number;
   scoreScale: ScoreScale;
   questionCount: number;
@@ -124,6 +126,14 @@ export interface Exam {
   shuffleQuestions: boolean;
   status: 'draft' | 'published' | 'closed';
   createdAt: string;
+  updatedAt?: string;
+  openTime?: string; // Ngày giờ bắt đầu (ISO string hoặc rỗng)
+  closeTime?: string; // Ngày giờ hết hạn (ISO string hoặc rỗng)
+  maxAttempts?: number; // 0 hoặc không đặt = không giới hạn; > 0 = giới hạn số lần
+  showAnswersImmediately?: boolean;
+  showScoreImmediately?: boolean;
+  questionSelectionMode?: 'manual' | 'ai' | 'random';
+  randomRatio?: { biet: number; hieu: number; vanDung: number };
 }
 
 export interface StudentAnswer {
