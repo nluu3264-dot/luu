@@ -1,0 +1,6 @@
+{
+  "name": "ÔN TẬP VÀ KIỂM TRA LỊCH SỬ – ĐỊA LÍ THCS",
+  "description": "Ứng dụng ôn tập kiến thức và kiểm tra thường xuyên môn Lịch sử và Địa lí THCS lớp 6, 7, 8, 9 với Gemini AI tự động đọc tài liệu và sinh câu hỏi. Tác giả: Trương Hiền Lưu.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

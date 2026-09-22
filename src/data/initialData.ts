@@ -1,0 +1,500 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { AppStoreData, Classroom, Student, Lesson, Question, Exam } from '../types';
+
+export const initialClassrooms: Classroom[] = [
+  { id: 'cls-6a1', classCode: '6A1', className: 'Lớp 6A1', grade: 6, academicYear: '2025-2026', studentCount: 35 },
+  { id: 'cls-6a2', classCode: '6A2', className: 'Lớp 6A2', grade: 6, academicYear: '2025-2026', studentCount: 34 },
+  { id: 'cls-7a1', classCode: '7A1', className: 'Lớp 7A1', grade: 7, academicYear: '2025-2026', studentCount: 36 },
+  { id: 'cls-8a1', classCode: '8A1', className: 'Lớp 8A1', grade: 8, academicYear: '2025-2026', studentCount: 38 },
+  { id: 'cls-9a1', classCode: '9A1', className: 'Lớp 9A1', grade: 9, academicYear: '2025-2026', studentCount: 35 },
+];
+
+export const initialStudents: Student[] = [
+  { id: 'std-01', studentCode: 'HS601', fullName: 'Nguyễn Văn An', classCode: '6A1', grade: 6 },
+  { id: 'std-02', studentCode: 'HS602', fullName: 'Trần Thị Bình', classCode: '6A1', grade: 6 },
+  { id: 'std-03', studentCode: 'HS603', fullName: 'Lê Hoàng Cường', classCode: '6A1', grade: 6 },
+  { id: 'std-04', studentCode: 'HS604', fullName: 'Phạm Minh Đức', classCode: '6A1', grade: 6 },
+  { id: 'std-05', studentCode: 'HS605', fullName: 'Vũ Ngọc Hân', classCode: '6A1', grade: 6 },
+  { id: 'std-06', studentCode: 'HS701', fullName: 'Đặng Quốc Huy', classCode: '7A1', grade: 7 },
+  { id: 'std-07', studentCode: 'HS702', fullName: 'Hoàng Mai Lan', classCode: '7A1', grade: 7 },
+  { id: 'std-08', studentCode: 'HS801', fullName: 'Ngô Thanh Tùng', classCode: '8A1', grade: 8 },
+  { id: 'std-09', studentCode: 'HS901', fullName: 'Bùi Gia Khang', classCode: '9A1', grade: 9 },
+];
+
+export const initialLessons: Lesson[] = [
+  // LỊCH SỬ LỚP 6
+  {
+    id: 'ls-6-b1',
+    subject: 'lich-su',
+    grade: 6,
+    lessonNumber: 1,
+    title: 'Bài 1: Lịch sử là gì? Ý nghĩa của việc học lịch sử',
+    theory: {
+      summary: 'Lịch sử là tất cả những gì đã xảy ra trong quá khứ của xã hội loài người. Môn Lịch sử giúp chúng ta hiểu cội nguồn dân tộc, quá trình dựng nước và giữ nước của cha ông, đúc kết kinh nghiệm cho hiện tại và tương lai.',
+      keyPoints: [
+        'Khái niệm lịch sử: toàn bộ hoạt động của con người trong quá khứ.',
+        'Các nguồn sử liệu: tư liệu truyền miệng, tư liệu hiện vật, tư liệu chữ viết.',
+        'Ý nghĩa học tập: biết ơn tổ tiên, bồi dưỡng lòng yêu nước, mở rộng tầm nhìn văn hóa nhân loại.'
+      ],
+      timelineOrFacts: [
+        { title: 'Tư liệu truyền miệng', content: 'Thần thoại, truyền thuyết, ca dao được lưu truyền qua các thế hệ.' },
+        { title: 'Tư liệu hiện vật', content: 'Di tích khảo cổ, công cụ lao động, đồ gốm, vũ khí cổ.' },
+        { title: 'Tư liệu chữ viết', content: 'Văn bia, sách cổ, tài liệu lưu trữ cổ xưa.' }
+      ]
+    },
+    createdAt: '2025-01-10'
+  },
+  {
+    id: 'ls-6-b2',
+    subject: 'lich-su',
+    grade: 6,
+    lessonNumber: 2,
+    title: 'Bài 2: Nguồn gốc loài người và các nền văn minh cổ đại',
+    theory: {
+      summary: 'Quá trình tiến hóa từ Vượn người thành Người tối cổ, rồi phát triển thành Người tinh khôn. Lao động đóng vai trò quyết định trong quá trình chuyển biến này.',
+      keyPoints: [
+        'Vượn người xuất hiện khoảng 5 - 6 triệu năm trước ở Đông Phi, Tây Á và Đông Nam Á.',
+        'Người tối cổ (khoảng 4 triệu năm trước): biết ghè đẽo đá thô sơ, tìm ra lửa.',
+        'Người tinh khôn (khoảng 15 vạn năm trước): cấu tạo cơ thể như người ngày nay, công cụ tinh xảo.'
+      ]
+    },
+    createdAt: '2025-01-12'
+  },
+  {
+    id: 'ls-6-b3',
+    subject: 'lich-su',
+    grade: 6,
+    lessonNumber: 3,
+    title: 'Bài 3: Nhà nước Văn Lang – Âu Lạc',
+    theory: {
+      summary: 'Nhà nước Văn Lang do các vua Hùng đứng đầu, đóng đô ở Phong Châu (Phú Thọ). Nối tiếp là nước Âu Lạc của Thục Phán An Dương Vương với thành Cổ Loa kiên cố.',
+      keyPoints: [
+        'Cơ sở hình thành: kinh tế nông nghiệp lúa nước phát triển, nhu cầu trị thủy đắp đê và chống ngoại xâm.',
+        'Tổ chức nhà nước: đứng đầu là Hùng Vương, giúp việc có Lạc hầu, Lạc tướng, Bồ chính.',
+        'Đời sống tinh thần: sùng bái tự nhiên, tín ngưỡng phồn thực, tục nhuộm răng, ăn trầu, làm bánh chưng, bánh giầy.'
+      ]
+    },
+    createdAt: '2025-01-15'
+  },
+
+  // ĐỊA LÍ LỚP 6
+  {
+    id: 'dl-6-b1',
+    subject: 'dia-li',
+    grade: 6,
+    lessonNumber: 1,
+    title: 'Bài 1: Hệ thống kinh, vĩ tuyến và tọa độ địa lí',
+    theory: {
+      summary: 'Kinh tuyến là nửa đường tròn nối liền hai cực Bắc và Nam. Vĩ tuyến là những vòng tròn song song với đường Xích đạo. Tọa độ địa lí gồm kinh độ và vĩ độ của một điểm.',
+      keyPoints: [
+        'Kinh tuyến gốc (0°): đi qua Đài thiên văn Greenwich (Luân Đôn, Anh).',
+        'Vĩ tuyến gốc (0°): là đường Xích đạo chia Trái Đất thành hai bán cầu Bắc và Nam.',
+        'Tọa độ địa lí dùng để xác định chính xác vị trí của bất kỳ địa điểm nào trên Trái Đất.'
+      ]
+    },
+    createdAt: '2025-01-10'
+  },
+  {
+    id: 'dl-6-b2',
+    subject: 'dia-li',
+    grade: 6,
+    lessonNumber: 2,
+    title: 'Bài 2: Chuyển động tự quay quanh trục của Trái Đất và hệ quả',
+    theory: {
+      summary: 'Trái Đất tự quay quanh trục nghiêng 66°33′ từ Tây sang Đông, sinh ra hiện tượng ngày đêm luân phiên, giờ trên Trái Đất và sự lệch hướng chuyển động của các vật thể.',
+      keyPoints: [
+        'Thời gian tự quay 1 vòng: 24 giờ (1 ngày đêm).',
+        'Hệ quả 1: Hiện tượng ngày đêm luân phiên do Trái Đất có hình cầu và tự quay.',
+        'Hệ quả 2: Giờ khu vực (24 múi giờ) và giờ quốc tế (GMT / UTC). Việt Nam thuộc múi giờ số 7.',
+        'Hệ quả 3: Lực Cô-ri-ô-lít làm lệch hướng chuyển động (sang phải ở Bán cầu Bắc, sang trái ở Bán cầu Nam).'
+      ]
+    },
+    createdAt: '2025-01-14'
+  },
+
+  // LỊCH SỬ LỚP 7
+  {
+    id: 'ls-7-b1',
+    subject: 'lich-su',
+    grade: 7,
+    lessonNumber: 1,
+    title: 'Bài 1: Sự hình thành và phát triển của chế độ phong kiến ở Tây Âu',
+    theory: {
+      summary: 'Sự tan rã của Đế quốc La Mã cổ đại và sự xâm nhập của người Giéc-man đã dẫn đến sự ra đời của các vương quốc phong kiến Tây Âu, hình thành hai giai cấp cơ bản: lãnh chúa và nông nô.',
+      keyPoints: [
+        'Lãnh địa phong kiến: đơn vị kinh tế, chính trị độc lập, tự cung tự cấp.',
+        'Giai cấp chính: Lãnh chúa nắm ruộng đất và quyền lực; Nông nô phụ thuộc và nộp tô thuế nặng nề.',
+        'Sự xuất hiện thành thị trung đại: phá vỡ nền kinh tế tự nhiên của lãnh địa, thúc đẩy kinh tế hàng hóa.'
+      ]
+    },
+    createdAt: '2025-01-16'
+  },
+
+  // ĐỊA LÍ LỚP 7
+  {
+    id: 'dl-7-b1',
+    subject: 'dia-li',
+    grade: 7,
+    lessonNumber: 1,
+    title: 'Bài 1: Vị trí địa lí, đặc điểm tự nhiên châu Âu',
+    theory: {
+      summary: 'Châu Âu là một bộ phận của lục địa Á - Âu, nằm ở khu vực ôn đới bán cầu Bắc, có bờ biển bị cắt xẻ mạnh tạo nên nhiều bán đảo, vịnh và biển ăn sâu vào đất liền.',
+      keyPoints: [
+        'Diện tích: khoảng 10,5 triệu km², địa hình chủ yếu là đồng bằng (chiếm 2/3 diện tích).',
+        'Khí hậu: chủ yếu là khí hậu ôn đới hải dương và ôn đới lục địa; phía nam có khí hậu cận nhiệt Địa Trung Hải.',
+        'Mạng lưới sông ngòi dày đặc: sông Đa-nuýp, sông Vôn-ga, sông Ranh.'
+      ]
+    },
+    createdAt: '2025-01-18'
+  },
+
+  // LỊCH SỬ LỚP 8
+  {
+    id: 'ls-8-b1',
+    subject: 'lich-su',
+    grade: 8,
+    lessonNumber: 1,
+    title: 'Bài 1: Cách mạng tư sản Anh và Chiến tranh giành độc lập của 13 thuộc địa Anh ở Bắc Mỹ',
+    theory: {
+      summary: 'Những cuộc cách mạng tư sản bùng nổ do mâu thuẫn sâu sắc giữa giai cấp tư sản, tầng lớp quý tộc mới với chế độ phong kiến chuyên chế kìm hãm kinh tế tư bản chủ nghĩa.',
+      keyPoints: [
+        'Cách mạng tư sản Anh thế kỉ XVII thiết lập chế độ quân chủ lập hiến.',
+        'Chiến tranh 13 thuộc địa Bắc Mỹ thông qua Bản Tuyên ngôn Độc lập (1776), khai sinh Hợp chúng quốc Hoa Kỳ.'
+      ]
+    },
+    createdAt: '2025-01-20'
+  },
+
+  // ĐỊA LÍ LỚP 8
+  {
+    id: 'dl-8-b1',
+    subject: 'dia-li',
+    grade: 8,
+    lessonNumber: 1,
+    title: 'Bài 1: Vị trí địa lí và phạm vi lãnh thổ Việt Nam',
+    theory: {
+      summary: 'Việt Nam nằm ở rìa phía đông của bán đảo Đông Dương, gần trung tâm khu vực Đông Nam Á, thuộc vùng nhiệt đới gió mùa.',
+      keyPoints: [
+        'Phần đất liền kéo dài từ vĩ độ 8°34′B đến 23°23′B.',
+        'Vùng biển rộng khoảng 1 triệu km² với hàng nghìn hòn đảo lớn nhỏ (Hoàng Sa, Trường Sa).',
+        'Ý nghĩa: vị trí cầu nối giữa đất liền và hải đảo, giao thoa của các luồng sinh vật và văn hóa lớn.'
+      ]
+    },
+    createdAt: '2025-01-22'
+  },
+
+  // LỊCH SỬ LỚP 9
+  {
+    id: 'ls-9-b1',
+    subject: 'lich-su',
+    grade: 9,
+    lessonNumber: 1,
+    title: 'Bài 1: Liên Xô và các nước Đông Âu sau Chiến tranh thế giới thứ hai',
+    theory: {
+      summary: 'Công cuộc khôi phục kinh tế sau chiến tranh của Liên Xô và thành tựu xây dựng chủ nghĩa xã hội (chế tạo bom nguyên tử 1949, phóng vệ tinh nhân tạo đầu tiên 1957).',
+      keyPoints: [
+        'Liên Xô hoàn thành kế hoạch 5 năm khôi phục kinh tế trước thời hạn.',
+        'Đến nửa đầu những năm 70, Liên Xô là cường quốc công nghiệp đứng thứ hai thế giới sau Mỹ.'
+      ]
+    },
+    createdAt: '2025-01-24'
+  },
+
+  // ĐỊA LÍ LỚP 9
+  {
+    id: 'dl-9-b1',
+    subject: 'dia-li',
+    grade: 9,
+    lessonNumber: 1,
+    title: 'Bài 1: Cộng đồng các dân tộc Việt Nam và sự phân bố dân cư',
+    theory: {
+      summary: 'Việt Nam là quốc gia đa dân tộc với 54 dân tộc anh em cùng chung sống, trong đó người Kinh (Việt) chiếm đa số (khoảng 85,3%).',
+      keyPoints: [
+        'Đặc điểm: mỗi dân tộc có bản sắc văn hóa riêng (trang phục, ngôn ngữ, phong tục tập quán).',
+        'Phân bố: người Kinh cư trú chủ yếu ở đồng bằng, duyên hải; các dân tộc thiểu số chủ yếu ở miền núi và trung du.'
+      ]
+    },
+    createdAt: '2025-01-26'
+  }
+];
+
+export const initialQuestions: Question[] = [
+  // 1. Trắc nghiệm nhiều lựa chọn - Biết
+  {
+    id: 'q-ls6-01',
+    subject: 'lich-su',
+    grade: 6,
+    lessonId: 'ls-6-b1',
+    lessonName: 'Bài 1: Lịch sử là gì? Ý nghĩa của việc học lịch sử',
+    type: 'multiple-choice',
+    cognitiveLevel: 'biet',
+    questionText: 'Lịch sử là gì theo khái niệm khoa học chuẩn mực?',
+    options: [
+      'Toàn bộ những gì đã diễn ra trong quá khứ của loài người và xã hội loài người',
+      'Những câu chuyện truyền thuyết do người xưa tưởng tượng ra',
+      'Các sự kiện trong tương lai được dự đoán từ trước',
+      'Chỉ những cuộc chiến tranh giữ nước của cha ông'
+    ],
+    correctAnswers: [0],
+    explanation: 'Lịch sử là toàn bộ những gì đã diễn ra trong quá khứ của xã hội loài người.',
+    createdAt: '2025-01-10'
+  },
+  // 2. Trắc nghiệm nhiều lựa chọn - Hiểu
+  {
+    id: 'q-ls6-02',
+    subject: 'lich-su',
+    grade: 6,
+    lessonId: 'ls-6-b1',
+    lessonName: 'Bài 1: Lịch sử là gì? Ý nghĩa của việc học lịch sử',
+    type: 'multiple-choice',
+    cognitiveLevel: 'hieu',
+    questionText: 'Tại sao tư liệu hiện vật lại có giá trị lịch sử cao và đáng tin cậy hơn tư liệu truyền miệng?',
+    options: [
+      'Vì tư liệu hiện vật là dấu tích vật chất chân thực, ít bị khúc xạ bởi trí nhớ hay cảm xúc con người',
+      'Vì tư liệu hiện vật luôn có chữ khắc giải thích rõ ràng',
+      'Vì người xưa chỉ chế tạo đồ vật khi có sự kiện quan trọng',
+      'Vì tư liệu truyền miệng hoàn toàn là điều bịa đặt không có thật'
+    ],
+    correctAnswers: [0],
+    explanation: 'Tư liệu hiện vật là vật chất cụ thể còn lưu lại trực tiếp từ quá khứ nên có độ tin cậy khoa học cao.',
+    createdAt: '2025-01-10'
+  },
+  // 3. Trắc nghiệm nhiều lựa chọn - Vận dụng
+  {
+    id: 'q-ls6-03',
+    subject: 'lich-su',
+    grade: 6,
+    lessonId: 'ls-6-b3',
+    lessonName: 'Bài 3: Nhà nước Văn Lang – Âu Lạc',
+    type: 'multiple-choice',
+    cognitiveLevel: 'van-dung',
+    questionText: 'Từ bài học lịch sử về sự thất bại của nước Âu Lạc trước quân xâm lược Triệu Đà, thế hệ trẻ ngày nay rút ra bài học kinh nghiệm sâu sắc nhất là gì?',
+    options: [
+      'Luôn nâng cao tinh thần cảnh giác, củng cố quốc phòng và đoàn kết toàn dân để giữ vững độc lập',
+      'Chỉ cần chế tạo nỏ bắn được nhiều mũi tên là bảo vệ được tổ quốc',
+      'Không nên bang giao hay mở cửa tiếp xúc với bất kỳ quốc gia láng giềng nào',
+      'Xây dựng thành quách thật cao và sâu là đủ ngăn chặn mọi hiểm họa'
+    ],
+    correctAnswers: [0],
+    explanation: 'Bài học mất cảnh giác của An Dương Vương dẫn đến mất nước nhắc nhở chúng ta luôn phải cảnh giác và xây dựng sức mạnh toàn dân.',
+    createdAt: '2025-01-15'
+  },
+  // 4. Đúng / Sai
+  {
+    id: 'q-dl6-01',
+    subject: 'dia-li',
+    grade: 6,
+    lessonId: 'dl-6-b1',
+    lessonName: 'Bài 1: Hệ thống kinh, vĩ tuyến và tọa độ địa lí',
+    type: 'true-false',
+    cognitiveLevel: 'biet',
+    questionText: 'Đánh giá tính Đúng/Sai của các nhận định sau đây về hệ thống kinh tuyến và vĩ tuyến:',
+    statements: [
+      { statement: 'Kinh tuyến gốc là kinh tuyến 0° đi qua Đài thiên văn Greenwich ở Luân Đôn (Anh).', isCorrect: true },
+      { statement: 'Đường Xích đạo là đường kinh tuyến dài nhất trên Trái Đất.', isCorrect: false },
+      { statement: 'Vĩ tuyến là những vòng tròn song song với đường Xích đạo.', isCorrect: true },
+      { statement: 'Trái Đất được chia thành 360 múi giờ khác nhau trên toàn cầu.', isCorrect: false }
+    ],
+    explanation: 'Xích đạo là vĩ tuyến lớn nhất chứ không phải kinh tuyến; Trái Đất chia làm 24 múi giờ.',
+    createdAt: '2025-01-11'
+  },
+  // 5. Nối cột A - B
+  {
+    id: 'q-ls6-04',
+    subject: 'lich-su',
+    grade: 6,
+    lessonId: 'ls-6-b3',
+    lessonName: 'Bài 3: Nhà nước Văn Lang – Âu Lạc',
+    type: 'matching',
+    cognitiveLevel: 'hieu',
+    questionText: 'Hãy nối các chức danh/địa danh ở cột A với vai trò hoặc đặc điểm tương ứng ở cột B:',
+    matchingPairs: [
+      { left: 'Vua Hùng', right: 'Người đứng đầu nhà nước Văn Lang cổ đại' },
+      { left: 'Lạc hầu, Lạc tướng', right: 'Quan đại thần giúp vua cai quản việc nước và các bộ' },
+      { left: 'Phong Châu (Phú Thọ)', right: 'Kinh đô đầu tiên của nước Văn Lang' },
+      { left: 'Thành Cổ Loa', right: 'Thành ốc quân sự kiên cố của nước Âu Lạc' }
+    ],
+    explanation: 'Hệ thống tổ chức bộ máy và kinh đô thời kỳ Văn Lang - Âu Lạc.',
+    createdAt: '2025-01-15'
+  },
+  // 6. Trả lời ngắn
+  {
+    id: 'q-dl6-02',
+    subject: 'dia-li',
+    grade: 6,
+    lessonId: 'dl-6-b2',
+    lessonName: 'Bài 2: Chuyển động tự quay quanh trục của Trái Đất và hệ quả',
+    type: 'short-answer',
+    cognitiveLevel: 'biet',
+    questionText: 'Lãnh thổ Việt Nam nằm trọn vẹn trong múi giờ số mấy theo hệ thống giờ quốc tế (GMT/UTC)? (Chỉ ghi số)',
+    acceptableAnswers: ['7', 'múi giờ số 7', 'múi 7', 'GMT+7', 'UTC+7'],
+    explanation: 'Việt Nam nằm trong múi giờ thứ 7 (GMT+7).',
+    createdAt: '2025-01-14'
+  },
+  // 7. Điền khuyết
+  {
+    id: 'q-dl6-03',
+    subject: 'dia-li',
+    grade: 6,
+    lessonId: 'dl-6-b2',
+    lessonName: 'Bài 2: Chuyển động tự quay quanh trục của Trái Đất và hệ quả',
+    type: 'fill-in-blank',
+    cognitiveLevel: 'hieu',
+    questionText: 'Do Trái Đất có dạng hình [cầu] và tự quay quanh trục từ [Tây sang Đông] nên khắp mọi nơi trên bề mặt Trái Đất đều lần lượt có hiện tượng [ngày và đêm] luân phiên.',
+    acceptableAnswers: ['cầu', 'Tây sang Đông', 'ngày và đêm'],
+    explanation: 'Nguyên nhân tạo ra ngày đêm luân phiên là hình cầu và chuyển động tự quay.',
+    createdAt: '2025-01-14'
+  },
+  // 8. Tự luận
+  {
+    id: 'q-ls6-05',
+    subject: 'lich-su',
+    grade: 6,
+    lessonId: 'ls-6-b1',
+    lessonName: 'Bài 1: Lịch sử là gì? Ý nghĩa của việc học lịch sử',
+    type: 'essay',
+    cognitiveLevel: 'van-dung',
+    questionText: 'Bác Hồ từng dạy: "Dân ta phải biết sử ta, Cho tường gốc tích nước nhà Việt Nam". Em hãy nêu suy nghĩ của mình về lời dạy trên và giải thích vì sao học sinh THCS cần học tốt môn Lịch sử?',
+    essayGuide: 'Gợi ý chấm điểm (10 điểm):\n1. Hiểu được câu nói của Bác Hồ: Nhấn mạnh tầm quan trọng của việc hiểu cội nguồn dân tộc (2.5đ).\n2. Ý nghĩa môn Lịch sử: Giáo dục lòng yêu nước, biết ơn cha ông hy sinh xây dựng và bảo vệ đất nước (3.0đ).\n3. Bài học kinh nghiệm: Giúp thế hệ trẻ đúc rút bài học thành công và thất bại trong quá khứ để xây dựng tương lai (2.5đ).\n4. Liên hệ bản thân: Ý thức trách nhiệm học tập, giữ gìn di sản văn hóa và bảo vệ chủ quyền tổ quốc (2.0đ).',
+    explanation: 'Lời dạy của Bác nhắc nhở tinh thần dân tộc và trách nhiệm gìn giữ cội nguồn.',
+    createdAt: '2025-01-10'
+  },
+  // 9. Câu hỏi kèm hình ảnh (multimedia)
+  {
+    id: 'q-dl8-01',
+    subject: 'dia-li',
+    grade: 8,
+    lessonId: 'dl-8-b1',
+    lessonName: 'Bài 1: Vị trí địa lí và phạm vi lãnh thổ Việt Nam',
+    type: 'multiple-choice',
+    cognitiveLevel: 'hieu',
+    questionText: 'Quan sát lược đồ hình thể Việt Nam, hai quần đảo xa bờ nào của nước ta có ý nghĩa chiến lược to lớn về quốc phòng và kinh tế biển ở Biển Đông?',
+    mediaUrl: 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800&auto=format&fit=crop&q=80',
+    mediaType: 'image',
+    options: [
+      'Quần đảo Hoàng Sa và quần đảo Trường Sa',
+      'Quần đảo Côn Đảo và đảo Phú Quốc',
+      'Quần đảo Cô Tô và đảo Cát Bà',
+      'Quần đảo Thổ Chu và đảo Bạch Long Vĩ'
+    ],
+    correctAnswers: [0],
+    explanation: 'Hoàng Sa và Trường Sa là hai quần đảo tiền tiêu khẳng định chủ quyền biển đảo thiêng liêng của Việt Nam.',
+    createdAt: '2025-01-22'
+  }
+];
+
+export const initialExams: Exam[] = [
+  {
+    id: 'exam-ls6-15p',
+    title: 'Kiểm tra 15 phút Lịch sử 6 - Bài 1 & 3',
+    subject: 'lich-su',
+    grade: 6,
+    lessonIds: ['ls-6-b1', 'ls-6-b3'],
+    durationMinutes: 15,
+    scoreScale: 10,
+    questionCount: 4,
+    questionIds: ['q-ls6-01', 'q-ls6-02', 'q-ls6-03', 'q-ls6-04'],
+    assignedClassCodes: ['6A1', '6A2'],
+    answerRevealMode: 'immediate',
+    scoreRevealMode: 'immediate',
+    shuffleQuestions: true,
+    status: 'published',
+    createdAt: '2025-02-01'
+  },
+  {
+    id: 'exam-dl6-45p',
+    title: 'Kiểm tra định kì Địa lí 6 - Hệ thống kinh vĩ tuyến & Trái Đất',
+    subject: 'dia-li',
+    grade: 6,
+    lessonIds: ['dl-6-b1', 'dl-6-b2'],
+    durationMinutes: 45,
+    scoreScale: 10,
+    questionCount: 3,
+    questionIds: ['q-dl6-01', 'q-dl6-02', 'q-dl6-03'],
+    assignedClassCodes: ['6A1'],
+    answerRevealMode: 'immediate',
+    scoreRevealMode: 'immediate',
+    shuffleQuestions: true,
+    status: 'published',
+    createdAt: '2025-02-05'
+  }
+];
+
+export const initialStoreData: AppStoreData = {
+  classrooms: initialClassrooms,
+  students: initialStudents,
+  lessons: initialLessons,
+  questions: initialQuestions,
+  exams: initialExams,
+  submissions: [
+    {
+      id: 'sub-01',
+      examId: 'exam-ls6-15p',
+      examTitle: 'Kiểm tra 15 phút Lịch sử 6 - Bài 1 & 3',
+      subject: 'lich-su',
+      grade: 6,
+      studentId: 'std-01',
+      studentCode: 'HS601',
+      studentName: 'Nguyễn Văn An',
+      classCode: '6A1',
+      startedAt: '2025-02-10T08:00:00Z',
+      submittedAt: '2025-02-10T08:12:30Z',
+      durationSeconds: 750,
+      score: 10,
+      maxScore: 10,
+      percentage: 100,
+      correctCount: 4,
+      totalQuestions: 4,
+      answers: [
+        { questionId: 'q-ls6-01', selectedOptionIndices: [0] },
+        { questionId: 'q-ls6-02', selectedOptionIndices: [0] },
+        { questionId: 'q-ls6-03', selectedOptionIndices: [0] },
+        { questionId: 'q-ls6-04', matchingAnswers: { 0: 0, 1: 1, 2: 2, 3: 3 } }
+      ],
+      breakdown: {
+        biet: { total: 1, correct: 1, percentage: 100 },
+        hieu: { total: 2, correct: 2, percentage: 100 },
+        vanDung: { total: 1, correct: 1, percentage: 100 }
+      }
+    },
+    {
+      id: 'sub-02',
+      examId: 'exam-ls6-15p',
+      examTitle: 'Kiểm tra 15 phút Lịch sử 6 - Bài 1 & 3',
+      subject: 'lich-su',
+      grade: 6,
+      studentId: 'std-02',
+      studentCode: 'HS602',
+      studentName: 'Trần Thị Bình',
+      classCode: '6A1',
+      startedAt: '2025-02-10T08:02:00Z',
+      submittedAt: '2025-02-10T08:14:00Z',
+      durationSeconds: 720,
+      score: 7.5,
+      maxScore: 10,
+      percentage: 75,
+      correctCount: 3,
+      totalQuestions: 4,
+      answers: [
+        { questionId: 'q-ls6-01', selectedOptionIndices: [0] },
+        { questionId: 'q-ls6-02', selectedOptionIndices: [0] },
+        { questionId: 'q-ls6-03', selectedOptionIndices: [1] }, // sai câu vận dụng
+        { questionId: 'q-ls6-04', matchingAnswers: { 0: 0, 1: 1, 2: 2, 3: 3 } }
+      ],
+      breakdown: {
+        biet: { total: 1, correct: 1, percentage: 100 },
+        hieu: { total: 2, correct: 2, percentage: 100 },
+        vanDung: { total: 1, correct: 0, percentage: 0 }
+      }
+    }
+  ],
+  config: {
+    authorPasswordHash: 'biensan2025',
+    adminPasswordHash: 'quanly2025',
+    studentCodeScope: 'shared'
+  }
+};
