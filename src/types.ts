@@ -26,6 +26,8 @@ export interface Student {
   classCode: string;
   grade: GradeLevel;
   notes?: string;
+  password?: string;
+  hasSetPassword?: boolean;
 }
 
 export interface Classroom {

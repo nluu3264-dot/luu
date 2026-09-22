@@ -133,13 +133,51 @@ app.post('/api/auth/login', (req, res) => {
 
     if (student) {
       const classroom = currentStore.classrooms.find(c => c.classCode.toUpperCase() === cleanClass);
+      const studentPayload = {
+        ...student,
+        grade: student.grade || classroom?.grade || 6,
+        hasSetPassword: !!student.hasSetPassword,
+      };
+
+      // Case 1: Student has NOT set password yet (hasSetPassword === false)
+      if (!student.hasSetPassword) {
+        return res.json({
+          success: true,
+          role: 'student',
+          requiresPasswordSetup: true,
+          student: studentPayload,
+        });
+      }
+
+      // Case 2: Student HAS set password (hasSetPassword === true)
+      if (!password) {
+        return res.json({
+          success: false,
+          requiresPassword: true,
+          hasSetPassword: true,
+          error: 'Học sinh này đã đặt mật khẩu. Vui lòng nhập mật khẩu để đăng nhập!',
+          student: {
+            fullName: student.fullName,
+            classCode: student.classCode,
+            studentCode: student.studentCode,
+          }
+        });
+      }
+
+      if (student.password !== password) {
+        return res.status(401).json({
+          success: false,
+          requiresPassword: true,
+          hasSetPassword: true,
+          error: 'Mật khẩu học sinh không chính xác. Vui lòng kiểm tra lại hoặc nhờ GV Quản lý đặt lại mật khẩu!',
+        });
+      }
+
       return res.json({
         success: true,
         role: 'student',
-        student: {
-          ...student,
-          grade: student.grade || classroom?.grade || 6,
-        },
+        requiresPasswordSetup: false,
+        student: studentPayload,
       });
     }
 
@@ -153,6 +191,72 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   res.status(400).json({ success: false, error: 'Vai trò đăng nhập không hợp lệ!' });
+});
+
+// Check student password status API
+app.post('/api/student/check-status', (req, res) => {
+  const { classCode, studentCode } = req.body;
+  const cleanClass = String(classCode || '').trim().toUpperCase();
+  const cleanStd = String(studentCode || '').trim().toUpperCase();
+  const student = currentStore.students.find(
+    s => s.classCode.toUpperCase() === cleanClass && s.studentCode.toUpperCase() === cleanStd
+  );
+  if (!student) {
+    return res.status(404).json({ success: false, error: 'Không tìm thấy học sinh' });
+  }
+  return res.json({
+    success: true,
+    hasSetPassword: !!student.hasSetPassword,
+    fullName: student.fullName,
+  });
+});
+
+// Student First-time Setup Password API
+app.post('/api/student/setup-password', (req, res) => {
+  const { studentId, password } = req.body;
+  if (!studentId || !password || String(password).trim().length < 4) {
+    return res.status(400).json({ success: false, error: 'Mật khẩu phải có tối thiểu 4 ký tự!' });
+  }
+  const student = currentStore.students.find(s => s.id === studentId);
+  if (!student) {
+    return res.status(404).json({ success: false, error: 'Không tìm thấy học sinh trong hệ thống!' });
+  }
+  student.password = String(password).trim();
+  student.hasSetPassword = true;
+  saveStoreData(currentStore);
+  return res.json({ success: true, student });
+});
+
+// Student Change Password API
+app.post('/api/student/change-password', (req, res) => {
+  const { studentId, currentPassword, newPassword } = req.body;
+  if (!studentId || !newPassword || String(newPassword).trim().length < 4) {
+    return res.status(400).json({ success: false, error: 'Mật khẩu mới phải có tối thiểu 4 ký tự!' });
+  }
+  const student = currentStore.students.find(s => s.id === studentId);
+  if (!student) {
+    return res.status(404).json({ success: false, error: 'Không tìm thấy học sinh trong hệ thống!' });
+  }
+  if (student.hasSetPassword && student.password !== currentPassword) {
+    return res.status(400).json({ success: false, error: 'Mật khẩu hiện tại không chính xác!' });
+  }
+  student.password = String(newPassword).trim();
+  student.hasSetPassword = true;
+  saveStoreData(currentStore);
+  return res.json({ success: true, student });
+});
+
+// Admin Reset Student Password API
+app.post('/api/student/reset-password', (req, res) => {
+  const { studentId } = req.body;
+  const student = currentStore.students.find(s => s.id === studentId);
+  if (!student) {
+    return res.status(404).json({ success: false, error: 'Không tìm thấy học sinh trong hệ thống!' });
+  }
+  student.password = '';
+  student.hasSetPassword = false;
+  saveStoreData(currentStore);
+  return res.json({ success: true, student });
 });
 
 // 3. Exam Submissions API

@@ -21,6 +21,7 @@ import {
   exportExamResultsToExcel,
   parseStudentsFromExcel,
   parseStudentsFromClipboard,
+  resetStudentPasswordApi,
 } from '../../services/api';
 import {
   Shield,
@@ -41,7 +42,9 @@ import {
   Calendar,
   Shuffle,
   Eye,
+  EyeOff,
   Key,
+  KeyRound,
   Filter,
   Pencil,
   UserPlus,
@@ -111,7 +114,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   // Password Management
   const [newAuthorPassword, setNewAuthorPassword] = useState('');
   const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [showCurrentAuthorPwd, setShowCurrentAuthorPwd] = useState(false);
+  const [showCurrentAdminPwd, setShowCurrentAdminPwd] = useState(false);
+  const [showNewAuthorPwd, setShowNewAuthorPwd] = useState(false);
+  const [showNewAdminPwd, setShowNewAdminPwd] = useState(false);
   const [pwdMessage, setPwdMessage] = useState<string | null>(null);
+  const [pwdError, setPwdError] = useState<string | null>(null);
 
   // -------------------------------------------------------------
   // CLASS & STUDENT HANDLERS
@@ -179,6 +187,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       fullName: p.fullName || 'Học sinh',
       classCode: p.classCode || importTargetClass,
       grade: p.grade || 6,
+      password: '',
+      hasSetPassword: false,
     }));
 
     onUpdateStore({ students: [...store.students, ...newStudents] });
@@ -255,6 +265,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       fullName,
       classCode: targetClass,
       grade,
+      password: '',
+      hasSetPassword: false,
     };
 
     onUpdateStore({ students: [...store.students, newStudent] });
@@ -339,6 +351,29 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     onUpdateStore({ students: store.students.filter((s) => s.id !== student.id) });
   };
 
+  const handleResetStudentPassword = async (std: Student) => {
+    const confirmed = window.confirm(
+      `Đặt lại mật khẩu cho học sinh "${std.fullName}" (Mã: ${std.studentCode})?\n\nSau khi đặt lại, trạng thái sẽ thành "Chưa đặt mật khẩu" và học sinh sẽ phải tạo mật khẩu mới khi đăng nhập tiếp theo.`
+    );
+    if (!confirmed) return;
+
+    try {
+      await resetStudentPasswordApi(std.id);
+    } catch (e) {
+      console.warn('API reset failed, updating local state', e);
+    }
+
+    const updatedStudents = store.students.map((s) => {
+      if (s.id === std.id) {
+        return { ...s, password: '', hasSetPassword: false };
+      }
+      return s;
+    });
+
+    onUpdateStore({ students: updatedStudents });
+    alert(`Đã đặt lại mật khẩu cho học sinh "${std.fullName}". Học sinh sẽ được yêu cầu tạo mật khẩu mới ở lần đăng nhập tiếp theo.`);
+  };
+
   // -------------------------------------------------------------
   // EXAM HANDLERS
   // -------------------------------------------------------------
@@ -383,15 +418,37 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   // -------------------------------------------------------------
 
   const handleSavePasswords = () => {
+    setPwdMessage(null);
+    setPwdError(null);
+
+    const authorTrim = newAuthorPassword.trim();
+    const adminTrim = newAdminPassword.trim();
+
+    if (!authorTrim && !adminTrim) {
+      setPwdError('Vui lòng nhập ít nhất một mật khẩu mới để cập nhật!');
+      return;
+    }
+
+    if (authorTrim && authorTrim.length < 6) {
+      setPwdError('Mật khẩu GV Biên soạn phải có độ dài tối thiểu 6 ký tự!');
+      return;
+    }
+
+    if (adminTrim && adminTrim.length < 6) {
+      setPwdError('Mật khẩu GV Quản lý phải có độ dài tối thiểu 6 ký tự!');
+      return;
+    }
+
     const updatedConfig = { ...store.config };
-    if (newAuthorPassword.trim()) {
-      updatedConfig.authorPasswordHash = newAuthorPassword.trim();
+    if (authorTrim) {
+      updatedConfig.authorPasswordHash = authorTrim;
     }
-    if (newAdminPassword.trim()) {
-      updatedConfig.adminPasswordHash = newAdminPassword.trim();
+    if (adminTrim) {
+      updatedConfig.adminPasswordHash = adminTrim;
     }
+
     onUpdateStore({ config: updatedConfig });
-    setPwdMessage('Đã cập nhật mật khẩu hệ thống thành công!');
+    setPwdMessage('Đã cập nhật và lưu mật khẩu hệ thống mới thành công!');
     setNewAuthorPassword('');
     setNewAdminPassword('');
   };
@@ -632,6 +689,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     <th className="p-3">Họ và Tên</th>
                     <th className="p-3">Lớp</th>
                     <th className="p-3">Khối</th>
+                    <th className="p-3">Mật khẩu</th>
                     <th className="p-3 text-right">Thao tác</th>
                   </tr>
                 </thead>
@@ -649,8 +707,27 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         </span>
                       </td>
                       <td className="p-3 text-slate-600">Lớp {std.grade}</td>
+                      <td className="p-3">
+                        {std.hasSetPassword ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Đã đặt mật khẩu</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-slate-400 bg-slate-100">
+                            <span>- Chưa đặt mật khẩu</span>
+                          </span>
+                        )}
+                      </td>
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleResetStudentPassword(std)}
+                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                            title="Đặt lại mật khẩu (yêu cầu tạo mật khẩu mới khi đăng nhập)"
+                          >
+                            <KeyRound className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             onClick={() => handleStartEditStudent(std)}
                             className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
@@ -671,7 +748,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   ))}
                   {filteredStudents.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="text-center py-8 text-slate-400">
+                      <td colSpan={7} className="text-center py-8 text-slate-400">
                         Chưa có học sinh nào trong danh sách.
                       </td>
                     </tr>
@@ -961,44 +1038,107 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             <Key className="w-5 h-5 text-indigo-600" />
             <div>
               <h3 className="text-base font-bold text-slate-900">Bảo mật & Cấp mật khẩu giáo viên</h3>
-              <p className="text-xs text-slate-500">Giáo viên quản lý có quyền thay đổi mật khẩu riêng biệt cho 2 vai trò</p>
+              <p className="text-xs text-slate-500">Giáo viên quản lý có quyền thay đổi mật khẩu riêng biệt cho cả 2 vai trò</p>
             </div>
           </div>
 
           {pwdMessage && (
             <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-emerald-600" />
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>{pwdMessage}</span>
             </div>
           )}
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-800 mb-1">
-                Mật khẩu Giáo viên Biên soạn (Author) mới:
-              </label>
-              <input
-                type="text"
-                placeholder="Nhập mật khẩu mới cho GV Biên soạn..."
-                value={newAuthorPassword}
-                onChange={(e) => setNewAuthorPassword(e.target.value)}
-                className="w-full text-sm p-2.5 border border-slate-300 rounded-xl"
-              />
-              <span className="text-[11px] text-slate-500">Hiện tại: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">{store.config.authorPasswordHash}</code></span>
+          {pwdError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{pwdError}</span>
+            </div>
+          )}
+
+          <div className="space-y-5">
+            {/* Author Password Setting */}
+            <div className="p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-800">
+                  Mật khẩu Giáo viên Biên soạn (Author) mới:
+                </label>
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                  <span>Hiện tại:</span>
+                  <code className="bg-white border border-slate-200 px-1.5 py-0.5 rounded font-mono text-slate-700">
+                    {showCurrentAuthorPwd ? store.config.authorPasswordHash : '••••••••'}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentAuthorPwd(!showCurrentAuthorPwd)}
+                    className="p-1 text-slate-400 hover:text-slate-600"
+                    title={showCurrentAuthorPwd ? 'Ẩn' : 'Xem mật khẩu hiện tại'}
+                  >
+                    {showCurrentAuthorPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+              <div className="relative">
+                <input
+                  type={showNewAuthorPwd ? 'text' : 'password'}
+                  placeholder="Nhập mật khẩu mới cho GV Biên soạn (tối thiểu 6 ký tự)..."
+                  value={newAuthorPassword}
+                  onChange={(e) => setNewAuthorPassword(e.target.value)}
+                  className="w-full text-sm p-2.5 pr-10 border border-slate-300 rounded-xl bg-white focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewAuthorPwd(!showNewAuthorPwd)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                >
+                  {showNewAuthorPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Để trống nếu không muốn thay đổi mật khẩu của Giáo viên Biên soạn.
+              </p>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-800 mb-1">
-                Mật khẩu Giáo viên Quản lý (Admin) mới:
-              </label>
-              <input
-                type="text"
-                placeholder="Nhập mật khẩu mới cho GV Quản lý..."
-                value={newAdminPassword}
-                onChange={(e) => setNewAdminPassword(e.target.value)}
-                className="w-full text-sm p-2.5 border border-slate-300 rounded-xl"
-              />
-              <span className="text-[11px] text-slate-500">Hiện tại: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">{store.config.adminPasswordHash}</code></span>
+            {/* Admin Password Setting */}
+            <div className="p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-800">
+                  Mật khẩu Giáo viên Quản lý (Admin) mới:
+                </label>
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                  <span>Hiện tại:</span>
+                  <code className="bg-white border border-slate-200 px-1.5 py-0.5 rounded font-mono text-slate-700">
+                    {showCurrentAdminPwd ? store.config.adminPasswordHash : '••••••••'}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentAdminPwd(!showCurrentAdminPwd)}
+                    className="p-1 text-slate-400 hover:text-slate-600"
+                    title={showCurrentAdminPwd ? 'Ẩn' : 'Xem mật khẩu hiện tại'}
+                  >
+                    {showCurrentAdminPwd ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+              <div className="relative">
+                <input
+                  type={showNewAdminPwd ? 'text' : 'password'}
+                  placeholder="Nhập mật khẩu mới cho GV Quản lý (tối thiểu 6 ký tự)..."
+                  value={newAdminPassword}
+                  onChange={(e) => setNewAdminPassword(e.target.value)}
+                  className="w-full text-sm p-2.5 pr-10 border border-slate-300 rounded-xl bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewAdminPwd(!showNewAdminPwd)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                >
+                  {showNewAdminPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Để trống nếu không muốn thay đổi mật khẩu của Giáo viên Quản lý.
+              </p>
             </div>
 
             <button

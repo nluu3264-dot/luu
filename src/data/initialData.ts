@@ -14,15 +14,15 @@ export const initialClassrooms: Classroom[] = [
 ];
 
 export const initialStudents: Student[] = [
-  { id: 'std-01', studentCode: 'HS601', fullName: 'Nguyễn Văn An', classCode: '6A1', grade: 6 },
-  { id: 'std-02', studentCode: 'HS602', fullName: 'Trần Thị Bình', classCode: '6A1', grade: 6 },
-  { id: 'std-03', studentCode: 'HS603', fullName: 'Lê Hoàng Cường', classCode: '6A1', grade: 6 },
-  { id: 'std-04', studentCode: 'HS604', fullName: 'Phạm Minh Đức', classCode: '6A1', grade: 6 },
-  { id: 'std-05', studentCode: 'HS605', fullName: 'Vũ Ngọc Hân', classCode: '6A1', grade: 6 },
-  { id: 'std-06', studentCode: 'HS701', fullName: 'Đặng Quốc Huy', classCode: '7A1', grade: 7 },
-  { id: 'std-07', studentCode: 'HS702', fullName: 'Hoàng Mai Lan', classCode: '7A1', grade: 7 },
-  { id: 'std-08', studentCode: 'HS801', fullName: 'Ngô Thanh Tùng', classCode: '8A1', grade: 8 },
-  { id: 'std-09', studentCode: 'HS901', fullName: 'Bùi Gia Khang', classCode: '9A1', grade: 9 },
+  { id: 'std-01', studentCode: 'HS601', fullName: 'Nguyễn Văn An', classCode: '6A1', grade: 6, password: '', hasSetPassword: false },
+  { id: 'std-02', studentCode: 'HS602', fullName: 'Trần Thị Bình', classCode: '6A1', grade: 6, password: '', hasSetPassword: false },
+  { id: 'std-03', studentCode: 'HS603', fullName: 'Lê Hoàng Cường', classCode: '6A1', grade: 6, password: '', hasSetPassword: false },
+  { id: 'std-04', studentCode: 'HS604', fullName: 'Phạm Minh Đức', classCode: '6A1', grade: 6, password: '', hasSetPassword: false },
+  { id: 'std-05', studentCode: 'HS605', fullName: 'Vũ Ngọc Hân', classCode: '6A1', grade: 6, password: '', hasSetPassword: false },
+  { id: 'std-06', studentCode: 'HS701', fullName: 'Đặng Quốc Huy', classCode: '7A1', grade: 7, password: '', hasSetPassword: false },
+  { id: 'std-07', studentCode: 'HS702', fullName: 'Hoàng Mai Lan', classCode: '7A1', grade: 7, password: '', hasSetPassword: false },
+  { id: 'std-08', studentCode: 'HS801', fullName: 'Ngô Thanh Tùng', classCode: '8A1', grade: 8, password: '', hasSetPassword: false },
+  { id: 'std-09', studentCode: 'HS901', fullName: 'Bùi Gia Khang', classCode: '9A1', grade: 9, password: '', hasSetPassword: false },
 ];
 
 export const initialLessons: Lesson[] = [
@@ -493,8 +493,8 @@ export const initialStoreData: AppStoreData = {
     }
   ],
   config: {
-    authorPasswordHash: 'biensan2025',
-    adminPasswordHash: 'quanly2025',
+    authorPasswordHash: 'BienSoan#THCS2025',
+    adminPasswordHash: 'QuanLy#LSuDiaLi2025',
     studentCodeScope: 'shared'
   }
 };

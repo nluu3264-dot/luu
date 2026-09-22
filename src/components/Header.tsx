@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { SubjectType, GradeLevel, Role, Student } from '../types';
-import { BookOpen, Compass, Shield, User, LogOut, Award, Sparkles, School } from 'lucide-react';
+import { BookOpen, Compass, Shield, User, LogOut, Award, Sparkles, School, KeyRound, Key } from 'lucide-react';
 
 interface HeaderProps {
   currentSubject: SubjectType | 'all';
@@ -16,6 +16,7 @@ interface HeaderProps {
   currentStudent: Student | null;
   onOpenLogin: () => void;
   onLogout: () => void;
+  onOpenChangePassword?: () => void;
   activeView: string;
   onViewChange: (view: string) => void;
 }
@@ -29,6 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   currentStudent,
   onOpenLogin,
   onLogout,
+  onOpenChangePassword,
   activeView,
   onViewChange,
 }) => {
@@ -66,6 +68,19 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className="text-emerald-700 font-mono bg-emerald-100/70 px-1.5 py-0.5 rounded text-xs">
                   {currentStudent.classCode} • {currentStudent.studentCode}
                 </span>
+
+                {/* Change Password Button */}
+                {onOpenChangePassword && (
+                  <button
+                    onClick={onOpenChangePassword}
+                    title="Đổi mật khẩu tài khoản học sinh"
+                    className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-100 text-xs font-semibold transition-colors shadow-2xs"
+                  >
+                    <Key className="w-3 h-3 text-amber-600" />
+                    <span className="hidden sm:inline">Đổi mật khẩu</span>
+                  </button>
+                )}
+
                 <button
                   onClick={onLogout}
                   title="Đăng xuất"
@@ -108,15 +123,15 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Quick Switch Button (if guest or wanting to switch) */}
-            {role !== 'student' && (
-              <button
-                onClick={onOpenLogin}
-                className="text-xs text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg font-medium transition-colors"
-              >
-                Đổi vai trò
-              </button>
-            )}
+            {/* Quick Switch Button (allows logging in as teacher or switching account anytime) */}
+            <button
+              onClick={onOpenLogin}
+              className="text-xs text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg font-medium transition-colors inline-flex items-center gap-1.5 border border-slate-200/80 shadow-2xs"
+              title="Đổi vai trò hoặc đăng nhập giáo viên"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+              <span>{role === 'student' ? 'Đổi vai trò / Đăng nhập GV' : 'Đổi vai trò'}</span>
+            </button>
           </div>
         </div>
 

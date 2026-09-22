@@ -52,7 +52,15 @@ export async function loginApi(payload: {
   password?: string;
   classCode?: string;
   studentCode?: string;
-}) {
+}): Promise<{
+  success: boolean;
+  role: 'student' | 'author' | 'admin';
+  student?: Student;
+  requiresPassword?: boolean;
+  requiresPasswordSetup?: boolean;
+  hasSetPassword?: boolean;
+  error?: string;
+}> {
   const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -60,7 +68,80 @@ export async function loginApi(payload: {
   });
   const json = await res.json();
   if (!res.ok) {
+    // If 401 with requiresPassword flag, return the object so UI can prompt for password
+    if (json.requiresPassword) {
+      return json;
+    }
     throw new Error(json.error || 'Đăng nhập thất bại');
+  }
+  return json;
+}
+
+export async function checkStudentStatusApi(classCode: string, studentCode: string): Promise<{
+  success: boolean;
+  hasSetPassword: boolean;
+  fullName: string;
+}> {
+  const res = await fetch('/api/student/check-status', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ classCode, studentCode }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.error || 'Không tìm thấy học sinh');
+  }
+  return json;
+}
+
+export async function setupStudentPasswordApi(studentId: string, password: string): Promise<{
+  success: boolean;
+  student: Student;
+}> {
+  const res = await fetch('/api/student/setup-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentId, password }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.error || 'Lỗi thiết lập mật khẩu');
+  }
+  return json;
+}
+
+export async function changeStudentPasswordApi(
+  studentId: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<{
+  success: boolean;
+  student: Student;
+}> {
+  const res = await fetch('/api/student/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentId, currentPassword, newPassword }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.error || 'Lỗi thay đổi mật khẩu');
+  }
+  return json;
+}
+
+export async function resetStudentPasswordApi(studentId: string): Promise<{
+  success: boolean;
+  student: Student;
+}> {
+  const res = await fetch('/api/student/reset-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ studentId }),
+  });
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(json.error || 'Lỗi đặt lại mật khẩu');
   }
   return json;
 }

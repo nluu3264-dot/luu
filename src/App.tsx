@@ -9,6 +9,8 @@ import { getStoreApi, saveStoreApi } from './services/api';
 import { initialStoreData } from './data/initialData';
 import { Header } from './components/Header';
 import { LoginModal } from './components/auth/LoginModal';
+import { FirstTimePasswordModal } from './components/auth/FirstTimePasswordModal';
+import { ChangePasswordModal } from './components/auth/ChangePasswordModal';
 import { AuthorPortal } from './components/teacher/AuthorPortal';
 import { AdminPortal } from './components/admin/AdminPortal';
 import { StudentPortal } from './components/student/StudentPortal';
@@ -24,6 +26,8 @@ export default function App() {
     initialStoreData.students[0] || null
   );
   const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [showFirstTimeSetup, setShowFirstTimeSetup] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
 
   // Navigation Filter
   const [currentSubject, setCurrentSubject] = useState<SubjectType | 'all'>('all');
@@ -33,14 +37,43 @@ export default function App() {
   const [authorView, setAuthorView] = useState<'curriculum' | 'questions' | 'ai-generator'>('curriculum');
   const [adminView, setAdminView] = useState<'classes' | 'exams' | 'results' | 'settings'>('classes');
 
-  // Load server state on mount
+  // Load server state on mount & restore tab session if valid
   useEffect(() => {
     async function loadData() {
       try {
         const remoteStore = await getStoreApi();
         if (remoteStore && remoteStore.lessons) {
           setStore(remoteStore);
-          if (remoteStore.students && remoteStore.students.length > 0) {
+          
+          // Check for existing valid session in this browser tab
+          let hasSession = false;
+          try {
+            const rawSession = sessionStorage.getItem('on_tap_thcs_session');
+            if (rawSession) {
+              const session = JSON.parse(rawSession);
+              const age = Date.now() - (session.timestamp || 0);
+              // Max session duration 8 hours, tab-scoped
+              if (session && session.role && age < 8 * 60 * 60 * 1000) {
+                setRole(session.role);
+                if (session.student) {
+                  // Re-fetch latest student info from remoteStore if available
+                  const foundStd = remoteStore.students?.find((s: Student) => s.id === session.student.id) || session.student;
+                  setCurrentStudent(foundStd);
+                  setCurrentGrade(foundStd.grade);
+                  if (foundStd && !foundStd.hasSetPassword) {
+                    setShowFirstTimeSetup(true);
+                  }
+                }
+                hasSession = true;
+              } else {
+                sessionStorage.removeItem('on_tap_thcs_session');
+              }
+            }
+          } catch (e) {
+            console.warn('Could not read session', e);
+          }
+
+          if (!hasSession && remoteStore.students && remoteStore.students.length > 0) {
             setCurrentStudent(remoteStore.students[0]);
           }
         }
@@ -67,19 +100,79 @@ export default function App() {
     }
   };
 
-  const handleLoginSuccess = (newRole: Role, student?: Student) => {
+  const handleLoginSuccess = (newRole: Role, student?: Student, requiresPasswordSetup?: boolean) => {
     setRole(newRole);
     if (student) {
       setCurrentStudent(student);
       setCurrentGrade(student.grade);
+      if (requiresPasswordSetup || !student.hasSetPassword) {
+        setShowFirstTimeSetup(true);
+      }
     } else {
       setCurrentStudent(null);
     }
+
+    // Save session strictly to current browser tab
+    try {
+      sessionStorage.setItem('on_tap_thcs_session', JSON.stringify({
+        role: newRole,
+        student: student || null,
+        timestamp: Date.now(),
+      }));
+    } catch (e) {
+      console.warn('Could not save session', e);
+    }
+  };
+
+  const handleFirstTimePasswordSuccess = (updatedStudent: Student) => {
+    setCurrentStudent(updatedStudent);
+    setShowFirstTimeSetup(false);
+
+    // Update student in store
+    const updatedStudents = store.students.map((s) =>
+      s.id === updatedStudent.id ? updatedStudent : s
+    );
+    handleUpdateStore({ students: updatedStudents });
+
+    try {
+      sessionStorage.setItem('on_tap_thcs_session', JSON.stringify({
+        role: 'student',
+        student: updatedStudent,
+        timestamp: Date.now(),
+      }));
+    } catch (e) {}
+  };
+
+  const handleChangePasswordSuccess = (updatedStudent: Student) => {
+    setCurrentStudent(updatedStudent);
+
+    // Update student in store
+    const updatedStudents = store.students.map((s) =>
+      s.id === updatedStudent.id ? updatedStudent : s
+    );
+    handleUpdateStore({ students: updatedStudents });
+
+    try {
+      sessionStorage.setItem('on_tap_thcs_session', JSON.stringify({
+        role: 'student',
+        student: updatedStudent,
+        timestamp: Date.now(),
+      }));
+    } catch (e) {}
   };
 
   const handleLogout = () => {
-    setRole('guest');
-    setCurrentStudent(null);
+    try {
+      sessionStorage.removeItem('on_tap_thcs_session');
+    } catch (e) {}
+    setRole('student');
+    setShowFirstTimeSetup(false);
+    setShowChangePasswordModal(false);
+    if (store.students && store.students.length > 0) {
+      setCurrentStudent(store.students[0]);
+    } else {
+      setCurrentStudent(null);
+    }
     setLoginModalOpen(true);
   };
 
@@ -108,6 +201,7 @@ export default function App() {
         currentStudent={currentStudent}
         onOpenLogin={() => setLoginModalOpen(true)}
         onLogout={handleLogout}
+        onOpenChangePassword={() => setShowChangePasswordModal(true)}
         activeView={role === 'author' ? authorView : adminView}
         onViewChange={(v) => {
           if (role === 'author') setAuthorView(v as any);
@@ -174,53 +268,31 @@ export default function App() {
         )}
       </main>
 
-      {/* Floating Demo Role Switcher Quick Pill (for seamless evaluator testing) */}
-      <div className="fixed bottom-4 right-4 z-40 bg-white/95 backdrop-blur-xs border border-slate-200/90 shadow-md rounded-2xl p-1.5 flex items-center gap-1 text-xs">
-        <span className="text-[11px] font-bold text-slate-400 px-2 hidden sm:inline">Chuyển vai trò:</span>
-        <button
-          onClick={() => {
-            setRole('student');
-            if (store.students[0]) setCurrentStudent(store.students[0]);
-          }}
-          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl font-bold transition-all ${
-            role === 'student'
-              ? 'bg-emerald-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <User className="w-3.5 h-3.5" />
-          <span>Học sinh</span>
-        </button>
-        <button
-          onClick={() => setRole('author')}
-          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl font-bold transition-all ${
-            role === 'author'
-              ? 'bg-amber-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>GV Biên soạn</span>
-        </button>
-        <button
-          onClick={() => setRole('admin')}
-          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl font-bold transition-all ${
-            role === 'admin'
-              ? 'bg-indigo-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Shield className="w-3.5 h-3.5" />
-          <span>GV Quản lý</span>
-        </button>
-      </div>
-
       {/* Login Modal */}
       <LoginModal
         isOpen={loginModalOpen}
         onClose={() => setLoginModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}
       />
+
+      {/* First Time Password Setup Modal (Mandatory, blocks app access until set) */}
+      {showFirstTimeSetup && currentStudent && (
+        <FirstTimePasswordModal
+          isOpen={showFirstTimeSetup}
+          student={currentStudent}
+          onSuccess={handleFirstTimePasswordSuccess}
+        />
+      )}
+
+      {/* Change Password Modal */}
+      {showChangePasswordModal && currentStudent && (
+        <ChangePasswordModal
+          isOpen={showChangePasswordModal}
+          onClose={() => setShowChangePasswordModal(false)}
+          student={currentStudent}
+          onSuccess={handleChangePasswordSuccess}
+        />
+      )}
     </div>
   );
 }

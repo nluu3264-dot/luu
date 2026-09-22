@@ -6,43 +6,81 @@
 import React, { useState } from 'react';
 import { Role, Student } from '../../types';
 import { loginApi } from '../../services/api';
-import { Shield, Sparkles, User, Key, School, AlertCircle, X, Check } from 'lucide-react';
+import { Shield, Sparkles, User, Key, School, AlertCircle, X, Check, Eye, EyeOff } from 'lucide-react';
 
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoginSuccess: (role: Role, student?: Student) => void;
+  onLoginSuccess: (role: Role, student?: Student, requiresPasswordSetup?: boolean) => void;
+  initialRole?: 'student' | 'author' | 'admin';
 }
 
 export const LoginModal: React.FC<LoginModalProps> = ({
   isOpen,
   onClose,
   onLoginSuccess,
+  initialRole = 'student',
 }) => {
-  const [selectedRole, setSelectedRole] = useState<'student' | 'author' | 'admin'>('student');
+  const [selectedRole, setSelectedRole] = useState<'student' | 'author' | 'admin'>(initialRole);
   const [classCode, setClassCode] = useState('6A1');
   const [studentCode, setStudentCode] = useState('HS601');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  
+  // Student password states
+  const [studentHasPassword, setStudentHasPassword] = useState(false);
+  const [studentPassword, setStudentPassword] = useState('');
+  const [showStudentPassword, setShowStudentPassword] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
+  const handleRoleSelect = (role: 'student' | 'author' | 'admin') => {
+    setSelectedRole(role);
+    setError(null);
+    setPassword('');
+    setStudentPassword('');
+    setShowPassword(false);
+    setShowStudentPassword(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if ((selectedRole === 'author' || selectedRole === 'admin') && !password.trim()) {
+      setError('Vui lòng nhập mật khẩu!');
+      return;
+    }
+
+    if (selectedRole === 'student' && studentHasPassword && !studentPassword.trim()) {
+      setError('Vui lòng nhập mật khẩu học sinh!');
+      return;
+    }
+
     setLoading(true);
 
     try {
       const res = await loginApi({
         role: selectedRole,
-        password: password.trim(),
+        password: selectedRole === 'student' ? studentPassword.trim() : password.trim(),
         classCode: classCode.trim().toUpperCase(),
         studentCode: studentCode.trim().toUpperCase(),
       });
 
+      if (res.requiresPassword) {
+        setStudentHasPassword(true);
+        setError(res.error || 'Học sinh này đã đặt mật khẩu. Vui lòng nhập mật khẩu để đăng nhập!');
+        return;
+      }
+
       if (res.success) {
-        onLoginSuccess(res.role, res.student);
+        onLoginSuccess(res.role, res.student, res.requiresPasswordSetup);
+        setPassword('');
+        setStudentPassword('');
+        setStudentHasPassword(false);
         onClose();
       }
     } catch (err: any) {
@@ -52,17 +90,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     }
   };
 
-  const handleQuickDemo = (role: 'student' | 'author' | 'admin') => {
-    setSelectedRole(role);
+  const handleFillDemoStudent = () => {
+    setSelectedRole('student');
     setError(null);
-    if (role === 'student') {
-      setClassCode('6A1');
-      setStudentCode('HS601');
-    } else if (role === 'author') {
-      setPassword('biensan2025');
-    } else if (role === 'admin') {
-      setPassword('quanly2025');
-    }
+    setClassCode('6A1');
+    setStudentCode('HS601');
+    setStudentHasPassword(false);
+    setStudentPassword('');
   };
 
   return (
@@ -87,7 +121,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-xl mb-5">
             <button
               type="button"
-              onClick={() => { setSelectedRole('student'); setError(null); }}
+              onClick={() => handleRoleSelect('student')}
               className={`flex flex-col items-center gap-1 py-2 px-1 text-xs font-semibold rounded-lg transition-all ${
                 selectedRole === 'student'
                   ? 'bg-white text-emerald-800 shadow-xs'
@@ -99,7 +133,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => { setSelectedRole('author'); setError(null); }}
+              onClick={() => handleRoleSelect('author')}
               className={`flex flex-col items-center gap-1 py-2 px-1 text-xs font-semibold rounded-lg transition-all ${
                 selectedRole === 'author'
                   ? 'bg-white text-amber-800 shadow-xs'
@@ -111,7 +145,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => { setSelectedRole('admin'); setError(null); }}
+              onClick={() => handleRoleSelect('admin')}
               className={`flex flex-col items-center gap-1 py-2 px-1 text-xs font-semibold rounded-lg transition-all ${
                 selectedRole === 'admin'
                   ? 'bg-white text-indigo-800 shadow-xs'
@@ -166,11 +200,45 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       required
                       placeholder="HS601"
                       value={studentCode}
-                      onChange={(e) => setStudentCode(e.target.value.toUpperCase())}
+                      onChange={(e) => {
+                        setStudentCode(e.target.value.toUpperCase());
+                        setStudentHasPassword(false);
+                      }}
                       className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono"
                     />
                   </div>
                 </div>
+
+                {studentHasPassword && (
+                  <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Mật khẩu học sinh <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Key className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                      <input
+                        type={showStudentPassword ? 'text' : 'password'}
+                        required
+                        autoFocus
+                        placeholder="Nhập mật khẩu của em..."
+                        value={studentPassword}
+                        onChange={(e) => setStudentPassword(e.target.value)}
+                        className="w-full pl-9 pr-10 py-2 text-sm border border-emerald-400 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 font-mono bg-emerald-50/20"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowStudentPassword(!showStudentPassword)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                        title={showStudentPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                      >
+                        {showStudentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-emerald-700 mt-1">
+                      Học sinh đã đặt mật khẩu. Vui lòng nhập mật khẩu để vào ôn tập.
+                    </p>
+                  </div>
+                )}
               </>
             ) : selectedRole === 'author' ? (
               <>
@@ -180,44 +248,64 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Mật khẩu truy cập
+                    Mật khẩu truy cập biên soạn <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
                     <Key className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                     <input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       required
-                      placeholder="Mật khẩu biên soạn..."
+                      placeholder="Nhập mật khẩu GV Biên soạn..."
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600"
+                      className="w-full pl-9 pr-10 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                      title={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1">Mật khẩu mặc định: <code className="bg-slate-100 px-1 py-0.5 rounded text-amber-800 font-mono">biensan2025</code></p>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Bắt buộc nhập mật khẩu chính xác được cấp bởi Giáo viên Quản lý.
+                  </p>
                 </div>
               </>
             ) : (
               <>
                 <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl text-xs text-indigo-800 mb-3">
                   <p className="font-semibold mb-0.5">Giáo viên Quản lý (Admin/Controller):</p>
-                  <p className="text-indigo-700">Có toàn quyền cấu hình lớp học, danh sách học sinh, cấu hình bài kiểm tra, xem kết quả và thống kê.</p>
+                  <p className="text-indigo-700">Có toàn quyền cấu hình lớp học, danh sách học sinh, bài kiểm tra, xem kết quả và đổi mật khẩu.</p>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Mật khẩu quản trị
+                    Mật khẩu quản trị cấp cao <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative">
                     <Key className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
                     <input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       required
-                      placeholder="Mật khẩu quản trị..."
+                      placeholder="Nhập mật khẩu quản trị..."
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
+                      className="w-full pl-9 pr-10 py-2 text-sm border border-slate-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                      title={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
-                  <p className="text-[11px] text-slate-500 mt-1">Mật khẩu mặc định: <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-800 font-mono">quanly2025</code></p>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Bắt buộc nhập đúng mật khẩu quản trị để vào hệ thống quản lý.
+                  </p>
                 </div>
               </>
             )}
@@ -238,33 +326,18 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             </button>
           </form>
 
-          {/* Quick Demo Credentials Footer */}
-          <div className="mt-5 pt-4 border-t border-slate-100 text-center">
-            <span className="text-[11px] text-slate-400 block mb-2 font-medium">Bấm nhanh để thử nghiệm tài khoản mẫu:</span>
-            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+          {/* Quick Demo Helper (Học sinh only, no password bypass for teachers) */}
+          {selectedRole === 'student' && (
+            <div className="mt-5 pt-4 border-t border-slate-100 text-center">
               <button
                 type="button"
-                onClick={() => handleQuickDemo('student')}
-                className="text-[11px] px-2 py-1 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-md font-medium transition-colors"
+                onClick={handleFillDemoStudent}
+                className="text-xs px-3 py-1.5 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 rounded-lg font-medium transition-colors inline-flex items-center gap-1.5"
               >
-                Học sinh (6A1 - HS601)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('author')}
-                className="text-[11px] px-2 py-1 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-md font-medium transition-colors"
-              >
-                GV Biên soạn
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemo('admin')}
-                className="text-[11px] px-2 py-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md font-medium transition-colors"
-              >
-                GV Quản lý
+                <span>Điền nhanh thông tin HS mẫu (Lớp 6A1 - Mã HS601)</span>
               </button>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
