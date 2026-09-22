@@ -487,6 +487,129 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     ? (filteredSubmissions.reduce((acc, s) => acc + s.score, 0) / filteredSubmissions.length).toFixed(1)
     : '0';
 
+  // -------------------------------------------------------------
+  // BATCH SELECTION STATES & HANDLERS
+  // -------------------------------------------------------------
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [selectedClassCodes, setSelectedClassCodes] = useState<string[]>([]);
+  const [selectedExamIds, setSelectedExamIds] = useState<string[]>([]);
+  const [selectedSubmissionIds, setSelectedSubmissionIds] = useState<string[]>([]);
+
+  // Batch Class deletion
+  const handleToggleSelectClass = (code: string) => {
+    setSelectedClassCodes((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]
+    );
+  };
+
+  const handleToggleSelectAllClasses = () => {
+    if (selectedClassCodes.length === store.classrooms.length && store.classrooms.length > 0) {
+      setSelectedClassCodes([]);
+    } else {
+      setSelectedClassCodes(store.classrooms.map((c) => c.classCode));
+    }
+  };
+
+  const handleBatchDeleteClasses = () => {
+    if (selectedClassCodes.length === 0) return;
+    const count = selectedClassCodes.length;
+    if (!confirm(`Bạn có chắc chắn muốn xóa ${count} lớp học đã chọn và tất cả học sinh thuộc các lớp này?`)) return;
+
+    const remainingClasses = store.classrooms.filter((c) => !selectedClassCodes.includes(c.classCode));
+    const remainingStudents = store.students.filter((s) => !selectedClassCodes.includes(s.classCode));
+    onUpdateStore({
+      classrooms: remainingClasses,
+      students: remainingStudents,
+    });
+    if (selectedClassCodes.includes(selectedClassCode)) {
+      setSelectedClassCode('all');
+    }
+    setSelectedClassCodes([]);
+  };
+
+  // Batch Student deletion
+  const handleToggleSelectStudent = (id: string) => {
+    setSelectedStudentIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAllStudents = () => {
+    if (selectedStudentIds.length === filteredStudents.length && filteredStudents.length > 0) {
+      setSelectedStudentIds([]);
+    } else {
+      setSelectedStudentIds(filteredStudents.map((s) => s.id));
+    }
+  };
+
+  const handleBatchDeleteStudents = () => {
+    if (selectedStudentIds.length === 0) return;
+    const count = selectedStudentIds.length;
+    if (!confirm(`Bạn có chắc chắn muốn xóa ${count} học sinh đã chọn khỏi hệ thống?`)) return;
+
+    const remaining = store.students.filter((s) => !selectedStudentIds.includes(s.id));
+    onUpdateStore({ students: remaining });
+    setSelectedStudentIds([]);
+  };
+
+  // Batch Exam deletion
+  const handleToggleSelectExam = (id: string) => {
+    setSelectedExamIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAllExams = () => {
+    if (selectedExamIds.length === store.exams.length && store.exams.length > 0) {
+      setSelectedExamIds([]);
+    } else {
+      setSelectedExamIds(store.exams.map((e) => e.id));
+    }
+  };
+
+  const handleBatchDeleteExams = () => {
+    if (selectedExamIds.length === 0) return;
+    const count = selectedExamIds.length;
+    if (!confirm(`Bạn có chắc chắn muốn xóa ${count} đề kiểm tra đã chọn?`)) return;
+
+    const remaining = store.exams.filter((e) => !selectedExamIds.includes(e.id));
+    onUpdateStore({ exams: remaining });
+    setSelectedExamIds([]);
+  };
+
+  // Single Submission deletion
+  const handleDeleteSubmission = (id: string) => {
+    if (!confirm('Bạn có chắc muốn xóa kết quả nộp bài này?')) return;
+    onUpdateStore({
+      submissions: store.submissions.filter((s) => s.id !== id),
+    });
+  };
+
+  // Batch Submission deletion
+  const handleToggleSelectSubmission = (id: string) => {
+    setSelectedSubmissionIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAllSubmissions = () => {
+    if (selectedSubmissionIds.length === filteredSubmissions.length && filteredSubmissions.length > 0) {
+      setSelectedSubmissionIds([]);
+    } else {
+      setSelectedSubmissionIds(filteredSubmissions.map((s) => s.id));
+    }
+  };
+
+  const handleBatchDeleteSubmissions = () => {
+    if (selectedSubmissionIds.length === 0) return;
+    const count = selectedSubmissionIds.length;
+    if (!confirm(`Bạn có chắc chắn muốn xóa ${count} bài nộp đã chọn khỏi hệ thống?`)) return;
+
+    const remaining = store.submissions.filter((s) => !selectedSubmissionIds.includes(s.id));
+    onUpdateStore({ submissions: remaining });
+    setSelectedSubmissionIds([]);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       {/* Admin Header Card */}
@@ -555,10 +678,32 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         <div className="space-y-6">
           {/* Class List Ribbon */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs">
-            <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <School className="w-5 h-5 text-indigo-600" />
-                <h3 className="text-sm font-bold text-slate-900">Danh sách các Lớp học THCS</h3>
+            <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100 flex-wrap gap-2">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <School className="w-5 h-5 text-indigo-600" />
+                  <h3 className="text-sm font-bold text-slate-900">Danh sách các Lớp học THCS</h3>
+                </div>
+                {store.classrooms.length > 0 && (
+                  <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none bg-slate-100 hover:bg-slate-200/80 px-2.5 py-1 rounded-md transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={selectedClassCodes.length === store.classrooms.length && store.classrooms.length > 0}
+                      onChange={handleToggleSelectAllClasses}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                    />
+                    <span className="font-medium">Chọn tất cả</span>
+                  </label>
+                )}
+                {selectedClassCodes.length > 0 && (
+                  <button
+                    onClick={handleBatchDeleteClasses}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-xs transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Xóa lớp đã chọn ({selectedClassCodes.length})</span>
+                  </button>
+                )}
               </div>
               <button
                 onClick={() => setShowAddClassModal(true)}
@@ -584,18 +729,30 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
               {store.classrooms.map((cls) => {
                 const count = store.students.filter((s) => s.classCode === cls.classCode).length;
+                const isSelected = selectedClassCodes.includes(cls.classCode);
                 return (
                   <div
                     key={cls.id}
                     onClick={() => setSelectedClassCode(cls.classCode)}
                     className={`p-3 rounded-xl border text-left cursor-pointer relative group transition-all ${
-                      selectedClassCode === cls.classCode
+                      isSelected
+                        ? 'border-indigo-600 bg-indigo-50/70 shadow-xs ring-1 ring-indigo-500'
+                        : selectedClassCode === cls.classCode
                         ? 'border-indigo-600 bg-indigo-50/60 shadow-xs'
                         : 'border-slate-200 hover:bg-slate-50'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900">{cls.classCode}</span>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => handleToggleSelectClass(cls.classCode)}
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                        />
+                        <span className="text-xs font-bold text-slate-900">{cls.classCode}</span>
+                      </div>
                       <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
                         K{cls.grade}
                       </span>
@@ -609,6 +766,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                         handleDeleteClass(cls.classCode);
                       }}
                       className="absolute top-2 right-2 p-1 text-slate-300 hover:text-rose-600 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Xóa lớp học"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -631,6 +789,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
+                {selectedStudentIds.length > 0 && (
+                  <button
+                    onClick={handleBatchDeleteStudents}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-xs transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Xóa đã chọn ({selectedStudentIds.length})</span>
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     const initialClass = selectedClassCode !== 'all' ? selectedClassCode : (store.classrooms[0]?.classCode || '6A1');
@@ -684,6 +851,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider">
                   <tr>
+                    <th className="p-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedStudentIds.length === filteredStudents.length && filteredStudents.length > 0}
+                        onChange={handleToggleSelectAllStudents}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                        title="Chọn tất cả học sinh đang hiển thị"
+                      />
+                    </th>
                     <th className="p-3">STT</th>
                     <th className="p-3">Mã Học Sinh</th>
                     <th className="p-3">Họ và Tên</th>
@@ -694,61 +870,77 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredStudents.map((std, idx) => (
-                    <tr key={std.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="p-3 text-slate-400 font-mono">{idx + 1}</td>
-                      <td className="p-3 font-mono font-bold text-slate-900 bg-slate-50/50">
-                        {std.studentCode}
-                      </td>
-                      <td className="p-3 font-semibold text-slate-800">{std.fullName}</td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold">
-                          {std.classCode}
-                        </span>
-                      </td>
-                      <td className="p-3 text-slate-600">Lớp {std.grade}</td>
-                      <td className="p-3">
-                        {std.hasSetPassword ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-                            <span>Đã đặt mật khẩu</span>
+                  {filteredStudents.map((std, idx) => {
+                    const isSelected = selectedStudentIds.includes(std.id);
+                    return (
+                      <tr
+                        key={std.id}
+                        className={`transition-colors ${
+                          isSelected ? 'bg-indigo-50/50 hover:bg-indigo-50/80' : 'hover:bg-slate-50/70'
+                        }`}
+                      >
+                        <td className="p-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectStudent(std.id)}
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                          />
+                        </td>
+                        <td className="p-3 text-slate-400 font-mono">{idx + 1}</td>
+                        <td className="p-3 font-mono font-bold text-slate-900 bg-slate-50/50">
+                          {std.studentCode}
+                        </td>
+                        <td className="p-3 font-semibold text-slate-800">{std.fullName}</td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold">
+                            {std.classCode}
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-slate-400 bg-slate-100">
-                            <span>- Chưa đặt mật khẩu</span>
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleResetStudentPassword(std)}
-                            className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                            title="Đặt lại mật khẩu (yêu cầu tạo mật khẩu mới khi đăng nhập)"
-                          >
-                            <KeyRound className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleStartEditStudent(std)}
-                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                            title="Sửa thông tin học sinh"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteStudent(std)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                            title="Xóa học sinh"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="p-3 text-slate-600">Lớp {std.grade}</td>
+                        <td className="p-3">
+                          {std.hasSetPassword ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Đã đặt mật khẩu</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-slate-400 bg-slate-100">
+                              <span>- Chưa đặt mật khẩu</span>
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => handleResetStudentPassword(std)}
+                              className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                              title="Đặt lại mật khẩu (yêu cầu tạo mật khẩu mới khi đăng nhập)"
+                            >
+                              <KeyRound className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleStartEditStudent(std)}
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="Sửa thông tin học sinh"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteStudent(std)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Xóa học sinh"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {filteredStudents.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="text-center py-8 text-slate-400">
+                      <td colSpan={8} className="text-center py-8 text-slate-400">
                         Chưa có học sinh nào trong danh sách.
                       </td>
                     </tr>
@@ -763,43 +955,78 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       {/* ---------------- TAB 2: QUẢN LÝ ĐỀ KIỂM TRA ---------------- */}
       {activeTab === 'exams' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 flex-wrap">
             <div>
               <h3 className="text-base font-bold text-slate-900">
                 Quản lý Đề kiểm tra thường xuyên
               </h3>
               <p className="text-xs text-slate-500">
-                Cấu hình thời gian, thang điểm 10/100, gán lớp và chế độ hiển thị đáp án
+                Cấu hình thời gian, thang điểm 10/100, gán lớp và chế độ hiển thị đáp án ({store.exams.length} đề)
               </p>
             </div>
-            <button
-              onClick={() => setShowAddExamModal(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl shadow-xs transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Tạo đề kiểm tra mới</span>
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              {store.exams.length > 0 && (
+                <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none bg-slate-100 hover:bg-slate-200/80 px-2.5 py-2 rounded-xl transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={selectedExamIds.length === store.exams.length && store.exams.length > 0}
+                    onChange={handleToggleSelectAllExams}
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5"
+                  />
+                  <span className="font-medium">Chọn tất cả</span>
+                </label>
+              )}
+              {selectedExamIds.length > 0 && (
+                <button
+                  onClick={handleBatchDeleteExams}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-xs transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Xóa đề đã chọn ({selectedExamIds.length})</span>
+                </button>
+              )}
+              <button
+                onClick={() => setShowAddExamModal(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl shadow-xs transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tạo đề kiểm tra mới</span>
+              </button>
+            </div>
           </div>
 
           {/* Exam Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {store.exams.map((exam) => {
               const submissionCount = store.submissions.filter((s) => s.examId === exam.id).length;
+              const isSelected = selectedExamIds.includes(exam.id);
               return (
                 <div
                   key={exam.id}
-                  className="p-5 rounded-2xl border border-slate-200 bg-white hover:border-indigo-300 transition-all shadow-2xs space-y-3"
+                  className={`p-5 rounded-2xl border transition-all shadow-2xs space-y-3 ${
+                    isSelected
+                      ? 'border-indigo-500 bg-indigo-50/20 ring-1 ring-indigo-500'
+                      : 'border-slate-200 bg-white hover:border-indigo-300'
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                        exam.subject === 'lich-su' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
-                      }`}>
-                        {exam.subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} • Lớp {exam.grade}
-                      </span>
-                      <h4 className="text-sm sm:text-base font-bold text-slate-900 mt-1">
-                        {exam.title}
-                      </h4>
+                    <div className="flex items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleSelectExam(exam.id)}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 mt-1 cursor-pointer"
+                      />
+                      <div>
+                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                          exam.subject === 'lich-su' ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
+                        }`}>
+                          {exam.subject === 'lich-su' ? 'Lịch sử' : 'Địa lí'} • Lớp {exam.grade}
+                        </span>
+                        <h4 className="text-sm sm:text-base font-bold text-slate-900 mt-1">
+                          {exam.title}
+                        </h4>
+                      </div>
                     </div>
                     <button
                       onClick={() => handleDeleteExam(exam.id)}
@@ -924,7 +1151,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {selectedSubmissionIds.length > 0 && (
+                  <button
+                    onClick={handleBatchDeleteSubmissions}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-xs transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Xóa bài nộp đã chọn ({selectedSubmissionIds.length})</span>
+                  </button>
+                )}
                 <button
                   onClick={() => exportExamResultsToExcel(filteredSubmissions)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg shadow-xs transition-colors"
@@ -971,6 +1207,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider">
                   <tr>
+                    <th className="p-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedSubmissionIds.length === filteredSubmissions.length && filteredSubmissions.length > 0}
+                        onChange={handleToggleSelectAllSubmissions}
+                        className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                        title="Chọn tất cả bài nộp"
+                      />
+                    </th>
                     <th className="p-3">Học sinh</th>
                     <th className="p-3">Lớp</th>
                     <th className="p-3">Đề thi</th>
@@ -979,47 +1224,73 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     <th className="p-3 text-center">Hiểu</th>
                     <th className="p-3 text-center">Vận dụng</th>
                     <th className="p-3 text-right">Thời gian nộp</th>
+                    <th className="p-3 text-right">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredSubmissions.map((sub) => (
-                    <tr key={sub.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="p-3">
-                        <span className="font-bold text-slate-900 block">{sub.studentName}</span>
-                        <span className="text-[11px] text-slate-400 font-mono">{sub.studentCode}</span>
-                      </td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold font-mono">
-                          {sub.classCode}
-                        </span>
-                      </td>
-                      <td className="p-3 text-slate-700 font-medium">{sub.examTitle}</td>
-                      <td className="p-3 text-center font-bold text-sm text-indigo-800">
-                        {sub.score} / {sub.maxScore}
-                      </td>
-                      <td className="p-3 text-center font-medium">
-                        <span className="text-sky-800 bg-sky-50 px-2 py-0.5 rounded border border-sky-200/50">
-                          {sub.breakdown.biet.correct}/{sub.breakdown.biet.total}
-                        </span>
-                      </td>
-                      <td className="p-3 text-center font-medium">
-                        <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/50">
-                          {sub.breakdown.hieu.correct}/{sub.breakdown.hieu.total}
-                        </span>
-                      </td>
-                      <td className="p-3 text-center font-medium">
-                        <span className="text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200/50">
-                          {sub.breakdown.vanDung.correct}/{sub.breakdown.vanDung.total}
-                        </span>
-                      </td>
-                      <td className="p-3 text-right text-slate-500 font-mono text-[11px]">
-                        {new Date(sub.submittedAt).toLocaleTimeString('vi-VN')}
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredSubmissions.map((sub) => {
+                    const isSelected = selectedSubmissionIds.includes(sub.id);
+                    return (
+                      <tr
+                        key={sub.id}
+                        className={`transition-colors ${
+                          isSelected ? 'bg-indigo-50/50 hover:bg-indigo-50/80' : 'hover:bg-slate-50/70'
+                        }`}
+                      >
+                        <td className="p-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectSubmission(sub.id)}
+                            className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-3.5 h-3.5 cursor-pointer"
+                          />
+                        </td>
+                        <td className="p-3">
+                          <span className="font-bold text-slate-900 block">{sub.studentName}</span>
+                          <span className="text-[11px] text-slate-400 font-mono">{sub.studentCode}</span>
+                        </td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold font-mono">
+                            {sub.classCode}
+                          </span>
+                        </td>
+                        <td className="p-3 text-slate-700 font-medium">{sub.examTitle}</td>
+                        <td className="p-3 text-center font-bold text-sm text-indigo-800">
+                          {sub.score} / {sub.maxScore}
+                        </td>
+                        <td className="p-3 text-center font-medium">
+                          <span className="text-sky-800 bg-sky-50 px-2 py-0.5 rounded border border-sky-200/50">
+                            {sub.breakdown.biet.correct}/{sub.breakdown.biet.total}
+                          </span>
+                        </td>
+                        <td className="p-3 text-center font-medium">
+                          <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/50">
+                            {sub.breakdown.hieu.correct}/{sub.breakdown.hieu.total}
+                          </span>
+                        </td>
+                        <td className="p-3 text-center font-medium">
+                          <span className="text-purple-800 bg-purple-50 px-2 py-0.5 rounded border border-purple-200/50">
+                            {sub.breakdown.vanDung.correct}/{sub.breakdown.vanDung.total}
+                          </span>
+                        </td>
+                        <td className="p-3 text-right text-slate-500 font-mono text-[11px]">
+                          {new Date(sub.submittedAt).toLocaleTimeString('vi-VN')}
+                        </td>
+                        <td className="p-3 text-right">
+                          <button
+                            onClick={() => handleDeleteSubmission(sub.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            title="Xóa bài nộp này"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {filteredSubmissions.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="text-center py-8 text-slate-400">
+                      <td colSpan={10} className="text-center py-8 text-slate-400">
                         Chưa có lượt nộp bài nào theo điều kiện lọc.
                       </td>
                     </tr>

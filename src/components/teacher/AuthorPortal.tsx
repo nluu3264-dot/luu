@@ -134,9 +134,108 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
   const [manualEssayGuide, setManualEssayGuide] = useState('');
   const [manualMediaUrl, setManualMediaUrl] = useState('');
 
+  // Batch Selection States
+  const [selectedLessonIds, setSelectedLessonIds] = useState<string[]>([]);
+  const [selectedQbQuestionIds, setSelectedQbQuestionIds] = useState<string[]>([]);
+  const [selectedLessonQuestionIds, setSelectedLessonQuestionIds] = useState<string[]>([]);
+
   // -------------------------------------------------------------
   // HANDLERS
   // -------------------------------------------------------------
+
+  // Batch selection & deletion for Lessons
+  const handleToggleSelectLesson = (id: string) => {
+    setSelectedLessonIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAllLessons = () => {
+    const visibleIds = filteredLessons.map((l) => l.id);
+    if (selectedLessonIds.length === visibleIds.length && visibleIds.length > 0) {
+      setSelectedLessonIds([]);
+    } else {
+      setSelectedLessonIds(visibleIds);
+    }
+  };
+
+  const handleBatchDeleteLessons = () => {
+    if (selectedLessonIds.length === 0) return;
+    if (
+      !confirm(
+        `Bạn có chắc chắn muốn xóa ${selectedLessonIds.length} bài học đã chọn khỏi chương trình? Hành động này không thể hoàn tác.`
+      )
+    ) {
+      return;
+    }
+    const remaining = store.lessons.filter((l) => !selectedLessonIds.includes(l.id));
+    onUpdateStore({ lessons: remaining });
+    if (selectedLessonIds.includes(activeLessonId)) {
+      setActiveLessonId(remaining[0]?.id || '');
+    }
+    setSelectedLessonIds([]);
+  };
+
+  // Batch selection & deletion for Question Bank
+  const handleToggleSelectQbQuestion = (id: string) => {
+    setSelectedQbQuestionIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAllQbQuestions = (filteredQuestions: Question[]) => {
+    const visibleIds = filteredQuestions.map((q) => q.id);
+    if (selectedQbQuestionIds.length === visibleIds.length && visibleIds.length > 0) {
+      setSelectedQbQuestionIds([]);
+    } else {
+      setSelectedQbQuestionIds(visibleIds);
+    }
+  };
+
+  const handleBatchDeleteQbQuestions = () => {
+    if (selectedQbQuestionIds.length === 0) return;
+    if (
+      !confirm(
+        `Bạn có chắc chắn muốn xóa ${selectedQbQuestionIds.length} câu hỏi đã chọn khỏi ngân hàng câu hỏi?`
+      )
+    ) {
+      return;
+    }
+    const remaining = store.questions.filter((q) => !selectedQbQuestionIds.includes(q.id));
+    onUpdateStore({ questions: remaining });
+    setSelectedQbQuestionIds([]);
+  };
+
+  // Batch selection & deletion for Lesson Exercises / Essay
+  const handleToggleSelectLessonQuestion = (id: string) => {
+    setSelectedLessonQuestionIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleToggleSelectAllLessonQuestions = (questionsToSelect: Question[]) => {
+    const visibleIds = questionsToSelect.map((q) => q.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedLessonQuestionIds.includes(id));
+    if (allSelected) {
+      setSelectedLessonQuestionIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+    } else {
+      setSelectedLessonQuestionIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  const handleBatchDeleteLessonQuestions = () => {
+    if (selectedLessonQuestionIds.length === 0) return;
+    if (
+      !confirm(
+        `Bạn có chắc chắn muốn xóa ${selectedLessonQuestionIds.length} câu hỏi đã chọn?`
+      )
+    ) {
+      return;
+    }
+    const remaining = store.questions.filter((q) => !selectedLessonQuestionIds.includes(q.id));
+    onUpdateStore({ questions: remaining });
+    setSelectedLessonQuestionIds([]);
+  };
 
   const handleCreateLesson = () => {
     if (!newLessonTitle.trim()) return;
@@ -434,7 +533,7 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Tree Navigation: List of Lessons in Grade */}
           <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
-            <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100 flex-wrap gap-2">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">
                   Cây bài học SGK Lớp {selectedGrade}
@@ -452,27 +551,75 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
               </button>
             </div>
 
+            {/* Batch Action Toolbar for Lessons */}
+            {filteredLessons.length > 0 && (
+              <div className="flex items-center justify-between gap-2 p-2 mb-2 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                <label className="inline-flex items-center gap-1.5 cursor-pointer text-slate-700 font-medium select-none">
+                  <input
+                    type="checkbox"
+                    checked={selectedLessonIds.length === filteredLessons.length && filteredLessons.length > 0}
+                    onChange={handleToggleSelectAllLessons}
+                    className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-3.5 h-3.5"
+                  />
+                  <span>Chọn tất cả ({filteredLessons.length})</span>
+                </label>
+                {selectedLessonIds.length > 0 && (
+                  <button
+                    onClick={handleBatchDeleteLessons}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-xs transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Xóa ({selectedLessonIds.length})</span>
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
-              {filteredLessons.map((les) => (
-                <div
-                  key={les.id}
-                  onClick={() => {
-                    setActiveLessonId(les.id);
-                    setIsEditingTheory(false);
-                  }}
-                  className={`p-3 rounded-xl cursor-pointer text-xs sm:text-sm font-medium transition-all flex items-start justify-between gap-2 ${
-                    currentLesson?.id === les.id
-                      ? 'bg-amber-50/90 text-amber-950 border border-amber-300 shadow-xs'
-                      : 'text-slate-700 hover:bg-slate-50 border border-transparent'
-                  }`}
-                >
-                  <div className="flex items-start gap-2 leading-snug">
-                    <BookMarked className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                    <span>{les.title}</span>
+              {filteredLessons.map((les) => {
+                const isSelected = selectedLessonIds.includes(les.id);
+                return (
+                  <div
+                    key={les.id}
+                    onClick={() => {
+                      setActiveLessonId(les.id);
+                      setIsEditingTheory(false);
+                    }}
+                    className={`p-3 rounded-xl cursor-pointer text-xs sm:text-sm font-medium transition-all flex items-start justify-between gap-2 group relative ${
+                      isSelected
+                        ? 'bg-amber-100/70 text-amber-950 border border-amber-400 ring-1 ring-amber-400 shadow-xs'
+                        : currentLesson?.id === les.id
+                        ? 'bg-amber-50/90 text-amber-950 border border-amber-300 shadow-xs'
+                        : 'text-slate-700 hover:bg-slate-50 border border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2 leading-snug">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() => handleToggleSelectLesson(les.id)}
+                        className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-3.5 h-3.5 mt-0.5 cursor-pointer shrink-0"
+                      />
+                      <BookMarked className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <span className="pr-4">{les.title}</span>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteLesson(les.id);
+                        }}
+                        className="p-1 text-slate-300 hover:text-rose-600 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Xóa bài học này"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                      <ChevronRight className="w-4 h-4 text-slate-400" />
+                    </div>
                   </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                </div>
-              ))}
+                );
+              })}
               {filteredLessons.length === 0 && (
                 <p className="text-xs text-slate-400 text-center py-6">Chưa có bài học nào. Hãy bấm "Thêm bài" hoặc dùng AI để tải tài liệu.</p>
               )}
@@ -750,109 +897,209 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
                 {/* 3.2 EXERCISES VIEW */}
                 {lessonSubSection === 'exercises' && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-slate-500">
-                        Bao gồm các dạng: Trắc nghiệm 4 lựa chọn, Đúng/Sai, Nối cột A-B, Trả lời ngắn, Điền khuyết.
-                      </p>
-                      <button
-                        onClick={() => {
-                          setManualQType('multiple-choice');
-                          setShowAddQuestionModal(true);
-                        }}
-                        className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-xs"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Thêm câu hỏi mới</span>
-                      </button>
-                    </div>
+                    {(() => {
+                      const exerciseQuestions = currentLessonQuestions.filter(q => q.type !== 'essay');
+                      const exerciseIds = exerciseQuestions.map(q => q.id);
+                      const selectedInExercises = selectedLessonQuestionIds.filter(id => exerciseIds.includes(id));
+                      const allSelected = exerciseIds.length > 0 && exerciseIds.every(id => selectedLessonQuestionIds.includes(id));
+                      return (
+                        <>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                            <p className="text-xs text-slate-500">
+                              Bao gồm các dạng: Trắc nghiệm 4 lựa chọn, Đúng/Sai, Nối cột A-B, Trả lời ngắn, Điền khuyết ({exerciseQuestions.length} câu).
+                            </p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {exerciseQuestions.length > 0 && (
+                                <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none bg-slate-100 hover:bg-slate-200/80 px-2.5 py-1.5 rounded-lg transition-colors">
+                                  <input
+                                    type="checkbox"
+                                    checked={allSelected}
+                                    onChange={() => handleToggleSelectAllLessonQuestions(exerciseQuestions)}
+                                    className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-3.5 h-3.5"
+                                  />
+                                  <span className="font-medium">Chọn tất cả</span>
+                                </label>
+                              )}
+                              {selectedInExercises.length > 0 && (
+                                <button
+                                  onClick={handleBatchDeleteLessonQuestions}
+                                  className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-colors shadow-xs"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Xóa đã chọn ({selectedInExercises.length})</span>
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setManualQType('multiple-choice');
+                                  setShowAddQuestionModal(true);
+                                }}
+                                className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-xs"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Thêm câu hỏi mới</span>
+                              </button>
+                            </div>
+                          </div>
 
-                    <div className="space-y-3">
-                      {currentLessonQuestions.filter(q => q.type !== 'essay').map((q, idx) => (
-                        <div key={q.id} className="relative group">
-                          <QuestionItem
-                            question={q}
-                            index={idx}
-                            mode="preview"
-                            showAnswer={true}
-                          />
-                          <button
-                            onClick={() => handleDeleteQuestion(q.id)}
-                            className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                            title="Xóa câu hỏi"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                      {currentLessonQuestions.filter(q => q.type !== 'essay').length === 0 && (
-                        <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                          <p className="text-sm text-slate-500 mb-2">Chưa có bài tập nào cho bài này.</p>
-                          <button
-                            onClick={() => onTabChange('ai-generator')}
-                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg"
-                          >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            Dùng AI sinh 5-30 câu hỏi ngay
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                          <div className="space-y-3">
+                            {exerciseQuestions.map((q, idx) => {
+                              const isSelected = selectedLessonQuestionIds.includes(q.id);
+                              return (
+                                <div
+                                  key={q.id}
+                                  className={`relative group rounded-2xl transition-all ${
+                                    isSelected ? 'ring-2 ring-amber-500 bg-amber-50/20' : ''
+                                  }`}
+                                >
+                                  <div className="absolute top-4 left-4 z-10">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => handleToggleSelectLessonQuestion(q.id)}
+                                      className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                                    />
+                                  </div>
+                                  <div className="pl-7">
+                                    <QuestionItem
+                                      question={q}
+                                      index={idx}
+                                      mode="preview"
+                                      showAnswer={true}
+                                    />
+                                  </div>
+                                  <button
+                                    onClick={() => handleDeleteQuestion(q.id)}
+                                    className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                    title="Xóa câu hỏi"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                            {exerciseQuestions.length === 0 && (
+                              <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                                <p className="text-sm text-slate-500 mb-2">Chưa có bài tập nào cho bài này.</p>
+                                <button
+                                  onClick={() => onTabChange('ai-generator')}
+                                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5" />
+                                  Dùng AI sinh 5-30 câu hỏi ngay
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
 
                 {/* 3.3 ESSAY VIEW */}
                 {lessonSubSection === 'essay' && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-slate-500">
-                        Câu hỏi tự luận rèn luyện tư duy phân tích, tổng hợp và liên hệ thực tế, kèm gợi ý chấm điểm.
-                      </p>
-                      <button
-                        onClick={() => {
-                          setManualQType('essay');
-                          setShowAddQuestionModal(true);
-                        }}
-                        className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-xs"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Thêm câu tự luận</span>
-                      </button>
-                    </div>
+                    {(() => {
+                      const essayQuestions = currentLessonQuestions.filter(q => q.type === 'essay');
+                      const essayIds = essayQuestions.map(q => q.id);
+                      const selectedInEssay = selectedLessonQuestionIds.filter(id => essayIds.includes(id));
+                      const allSelected = essayIds.length > 0 && essayIds.every(id => selectedLessonQuestionIds.includes(id));
+                      return (
+                        <>
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                            <p className="text-xs text-slate-500">
+                              Câu hỏi tự luận rèn luyện tư duy phân tích, tổng hợp và liên hệ thực tế, kèm gợi ý chấm điểm ({essayQuestions.length} câu).
+                            </p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {essayQuestions.length > 0 && (
+                                <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none bg-slate-100 hover:bg-slate-200/80 px-2.5 py-1.5 rounded-lg transition-colors">
+                                  <input
+                                    type="checkbox"
+                                    checked={allSelected}
+                                    onChange={() => handleToggleSelectAllLessonQuestions(essayQuestions)}
+                                    className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-3.5 h-3.5"
+                                  />
+                                  <span className="font-medium">Chọn tất cả</span>
+                                </label>
+                              )}
+                              {selectedInEssay.length > 0 && (
+                                <button
+                                  onClick={handleBatchDeleteLessonQuestions}
+                                  className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-colors shadow-xs"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Xóa đã chọn ({selectedInEssay.length})</span>
+                                </button>
+                              )}
+                              <button
+                                onClick={() => {
+                                  setManualQType('essay');
+                                  setShowAddQuestionModal(true);
+                                }}
+                                className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-xs"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Thêm câu tự luận</span>
+                              </button>
+                            </div>
+                          </div>
 
-                    <div className="space-y-3">
-                      {currentLessonQuestions.filter(q => q.type === 'essay').map((q, idx) => (
-                        <div key={q.id} className="relative group">
-                          <QuestionItem
-                            question={q}
-                            index={idx}
-                            mode="preview"
-                            showAnswer={true}
-                          />
-                          <button
-                            onClick={() => handleDeleteQuestion(q.id)}
-                            className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                            title="Xóa câu hỏi"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                      {currentLessonQuestions.filter(q => q.type === 'essay').length === 0 && (
-                        <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-300">
-                          <p className="text-sm text-slate-500 mb-2">Chưa có câu hỏi tự luận nào cho bài này.</p>
-                          <button
-                            onClick={() => {
-                              setManualQType('essay');
-                              setShowAddQuestionModal(true);
-                            }}
-                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            Soạn câu tự luận mới
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                          <div className="space-y-3">
+                            {essayQuestions.map((q, idx) => {
+                              const isSelected = selectedLessonQuestionIds.includes(q.id);
+                              return (
+                                <div
+                                  key={q.id}
+                                  className={`relative group rounded-2xl transition-all ${
+                                    isSelected ? 'ring-2 ring-amber-500 bg-amber-50/20' : ''
+                                  }`}
+                                >
+                                  <div className="absolute top-4 left-4 z-10">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => handleToggleSelectLessonQuestion(q.id)}
+                                      className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                                    />
+                                  </div>
+                                  <div className="pl-7">
+                                    <QuestionItem
+                                      question={q}
+                                      index={idx}
+                                      mode="preview"
+                                      showAnswer={true}
+                                    />
+                                  </div>
+                                  <button
+                                    onClick={() => handleDeleteQuestion(q.id)}
+                                    className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                    title="Xóa câu hỏi"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                            {essayQuestions.length === 0 && (
+                              <div className="text-center py-10 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                                <p className="text-sm text-slate-500 mb-2">Chưa có câu hỏi tự luận nào cho bài này.</p>
+                                <button
+                                  onClick={() => {
+                                    setManualQType('essay');
+                                    setShowAddQuestionModal(true);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 rounded-lg"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  Soạn câu tự luận mới
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </div>
@@ -864,127 +1111,169 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
       )}
 
       {/* ---------------- SECTION 2: NGÂN HÀNG CÂU HỎI ---------------- */}
-      {activeTab === 'questions' && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-5">
-          {/* Header Controls */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Ngân hàng câu hỏi Lịch sử – Địa lí THCS
-              </h3>
-              <p className="text-xs text-slate-500">
-                Tổng số: <span className="font-semibold text-amber-700">{store.questions.length} câu hỏi</span> đã được phân loại nhận thức
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowAddQuestionModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 shadow-xs transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Thêm câu hỏi mới</span>
-              </button>
-              <button
-                onClick={() => onTabChange('ai-generator')}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 shadow-xs transition-colors"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>AI Sinh câu hỏi</span>
-              </button>
-            </div>
-          </div>
+      {activeTab === 'questions' && (() => {
+        const filteredQbQuestions = store.questions.filter((q) => {
+          const matchSubject = currentSubject === 'all' || q.subject === currentSubject;
+          const matchGrade = currentGrade === 'all' || q.grade === currentGrade;
+          const matchCog = qbCogFilter === 'all' || q.cognitiveLevel === qbCogFilter;
+          const matchType = qbTypeFilter === 'all' || q.type === qbTypeFilter;
+          const matchSearch = !qbSearch || q.questionText.toLowerCase().includes(qbSearch.toLowerCase());
+          return matchSubject && matchGrade && matchCog && matchType && matchSearch;
+        });
+        const allQbSelected = filteredQbQuestions.length > 0 && selectedQbQuestionIds.length === filteredQbQuestions.length;
 
-          {/* Filters Bar */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
-            {/* Search Input */}
-            <div className="relative">
-              <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Tìm nội dung câu hỏi..."
-                value={qbSearch}
-                onChange={(e) => setQbSearch(e.target.value)}
-                className="w-full pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-xs"
-              />
+        return (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-5">
+            {/* Header Controls */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Ngân hàng câu hỏi Lịch sử – Địa lí THCS
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Tổng số: <span className="font-semibold text-amber-700">{store.questions.length} câu hỏi</span> đã được phân loại nhận thức
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowAddQuestionModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 shadow-xs transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Thêm câu hỏi mới</span>
+                </button>
+                <button
+                  onClick={() => onTabChange('ai-generator')}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 shadow-xs transition-colors"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>AI Sinh câu hỏi</span>
+                </button>
+              </div>
             </div>
 
-            {/* Cognitive Filter */}
-            <div>
-              <select
-                value={qbCogFilter}
-                onChange={(e) => setQbCogFilter(e.target.value)}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs"
-              >
-                <option value="all">Mọi mức độ nhận thức</option>
-                <option value="biet">Biết (Nhận biết)</option>
-                <option value="hieu">Hiểu (Thông hiểu)</option>
-                <option value="van-dung">Vận dụng</option>
-              </select>
+            {/* Filters Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+              {/* Search Input */}
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm nội dung câu hỏi..."
+                  value={qbSearch}
+                  onChange={(e) => setQbSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-xs"
+                />
+              </div>
+
+              {/* Cognitive Filter */}
+              <div>
+                <select
+                  value={qbCogFilter}
+                  onChange={(e) => setQbCogFilter(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs"
+                >
+                  <option value="all">Mọi mức độ nhận thức</option>
+                  <option value="biet">Biết (Nhận biết)</option>
+                  <option value="hieu">Hiểu (Thông hiểu)</option>
+                  <option value="van-dung">Vận dụng</option>
+                </select>
+              </div>
+
+              {/* Type Filter */}
+              <div>
+                <select
+                  value={qbTypeFilter}
+                  onChange={(e) => setQbTypeFilter(e.target.value)}
+                  className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs"
+                >
+                  <option value="all">Mọi dạng câu hỏi</option>
+                  <option value="multiple-choice">Trắc nghiệm</option>
+                  <option value="true-false">Đúng / Sai</option>
+                  <option value="matching">Nối cột</option>
+                  <option value="short-answer">Trả lời ngắn</option>
+                  <option value="fill-in-blank">Điền khuyết</option>
+                  <option value="essay">Tự luận</option>
+                </select>
+              </div>
+
+              {/* Counter & Action */}
+              <div className="flex items-center justify-end font-medium text-slate-600">
+                Lọc được: {filteredQbQuestions.length} câu
+              </div>
             </div>
 
-            {/* Type Filter */}
-            <div>
-              <select
-                value={qbTypeFilter}
-                onChange={(e) => setQbTypeFilter(e.target.value)}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs"
-              >
-                <option value="all">Mọi dạng câu hỏi</option>
-                <option value="multiple-choice">Trắc nghiệm</option>
-                <option value="true-false">Đúng / Sai</option>
-                <option value="matching">Nối cột</option>
-                <option value="short-answer">Trả lời ngắn</option>
-                <option value="fill-in-blank">Điền khuyết</option>
-                <option value="essay">Tự luận</option>
-              </select>
-            </div>
-
-            {/* Counter */}
-            <div className="flex items-center justify-end font-medium text-slate-600">
-              Lọc được: {
-                store.questions.filter((q) => {
-                  const matchSubject = currentSubject === 'all' || q.subject === currentSubject;
-                  const matchGrade = currentGrade === 'all' || q.grade === currentGrade;
-                  const matchCog = qbCogFilter === 'all' || q.cognitiveLevel === qbCogFilter;
-                  const matchType = qbTypeFilter === 'all' || q.type === qbTypeFilter;
-                  const matchSearch = !qbSearch || q.questionText.toLowerCase().includes(qbSearch.toLowerCase());
-                  return matchSubject && matchGrade && matchCog && matchType && matchSearch;
-                }).length
-              } câu
-            </div>
-          </div>
-
-          {/* List of Questions */}
-          <div className="space-y-3">
-            {store.questions
-              .filter((q) => {
-                const matchSubject = currentSubject === 'all' || q.subject === currentSubject;
-                const matchGrade = currentGrade === 'all' || q.grade === currentGrade;
-                const matchCog = qbCogFilter === 'all' || q.cognitiveLevel === qbCogFilter;
-                const matchType = qbTypeFilter === 'all' || q.type === qbTypeFilter;
-                const matchSearch = !qbSearch || q.questionText.toLowerCase().includes(qbSearch.toLowerCase());
-                return matchSubject && matchGrade && matchCog && matchType && matchSearch;
-              })
-              .map((q, idx) => (
-                <div key={q.id} className="relative group">
-                  <QuestionItem
-                    question={q}
-                    index={idx}
-                    mode="preview"
-                    showAnswer={true}
+            {/* Batch Action Toolbar */}
+            {filteredQbQuestions.length > 0 && (
+              <div className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex-wrap">
+                <label className="inline-flex items-center gap-2 cursor-pointer text-slate-700 font-medium select-none">
+                  <input
+                    type="checkbox"
+                    checked={allQbSelected}
+                    onChange={() => handleToggleSelectAllQbQuestions(filteredQbQuestions)}
+                    className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
                   />
+                  <span>Chọn tất cả ({filteredQbQuestions.length} câu đang hiển thị)</span>
+                </label>
+
+                {selectedQbQuestionIds.length > 0 && (
                   <button
-                    onClick={() => handleDeleteQuestion(q.id)}
-                    className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                    title="Xóa câu hỏi khỏi ngân hàng"
+                    onClick={handleBatchDeleteQbQuestions}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-lg shadow-xs transition-colors"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Xóa đã chọn ({selectedQbQuestionIds.length})</span>
                   </button>
-                </div>
-              ))}
+                )}
+              </div>
+            )}
+
+            {/* List of Questions */}
+            <div className="space-y-3">
+              {filteredQbQuestions.map((q, idx) => {
+                const isSelected = selectedQbQuestionIds.includes(q.id);
+                return (
+                  <div
+                    key={q.id}
+                    className={`relative group rounded-2xl transition-all ${
+                      isSelected ? 'ring-2 ring-amber-500 bg-amber-50/20' : ''
+                    }`}
+                  >
+                    <div className="absolute top-4 left-4 z-10">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleSelectQbQuestion(q.id)}
+                        className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                      />
+                    </div>
+                    <div className="pl-7">
+                      <QuestionItem
+                        question={q}
+                        index={idx}
+                        mode="preview"
+                        showAnswer={true}
+                      />
+                    </div>
+                    <button
+                      onClick={() => handleDeleteQuestion(q.id)}
+                      className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                      title="Xóa câu hỏi khỏi ngân hàng"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                );
+              })}
+              {filteredQbQuestions.length === 0 && (
+                <p className="text-xs text-slate-400 text-center py-8">
+                  Không tìm thấy câu hỏi nào theo bộ lọc.
+                </p>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ---------------- SECTION 3: AI TRỢ LÝ BIÊN SOẠN & ĐỌC TÀI LIỆU ---------------- */}
       {activeTab === 'ai-generator' && (
@@ -1030,26 +1319,43 @@ export const AuthorPortal: React.FC<AuthorPortalProps> = ({
 
             {/* Uploaded Files Chips */}
             {aiUploadedFiles.length > 0 && (
-              <div className="mt-4 pt-3 border-t border-amber-200/60 flex flex-wrap gap-2">
-                <span className="text-xs font-semibold text-slate-700 w-full mb-1">
-                  Đã tải lên ({aiUploadedFiles.length} tệp):
-                </span>
-                {aiUploadedFiles.map((f, i) => (
-                  <div
-                    key={i}
-                    className="inline-flex items-center gap-1.5 bg-white border border-amber-200 px-2.5 py-1 rounded-lg text-xs text-slate-800 shadow-2xs"
+              <div className="mt-4 pt-3 border-t border-amber-200/60">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold text-slate-700">
+                    Đã tải lên ({aiUploadedFiles.length} tệp):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm('Bạn có chắc muốn xóa tất cả tệp đã tải lên?')) {
+                        setAiUploadedFiles([]);
+                      }
+                    }}
+                    className="text-xs text-rose-600 hover:text-rose-700 font-semibold inline-flex items-center gap-1"
                   >
-                    <FileText className="w-3.5 h-3.5 text-amber-600" />
-                    <span className="truncate max-w-[180px]">{f.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => setAiUploadedFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                      className="text-slate-400 hover:text-rose-600 ml-1"
+                    <Trash2 className="w-3 h-3" />
+                    <span>Xóa tất cả tệp ({aiUploadedFiles.length})</span>
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {aiUploadedFiles.map((f, i) => (
+                    <div
+                      key={i}
+                      className="inline-flex items-center gap-1.5 bg-white border border-amber-200 px-2.5 py-1 rounded-lg text-xs text-slate-800 shadow-2xs"
                     >
-                      ×
-                    </button>
-                  </div>
-                ))}
+                      <FileText className="w-3.5 h-3.5 text-amber-600" />
+                      <span className="truncate max-w-[180px]">{f.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setAiUploadedFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="text-slate-400 hover:text-rose-600 ml-1"
+                        title="Xóa tệp này"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
